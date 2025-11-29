@@ -1,0 +1,4 @@
+/client/node_modules
+/client/public
+/middleware/node_modules
+/middleware/.env
