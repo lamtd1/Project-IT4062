@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+<<<<<<< HEAD
     "@tailwindcss/cli": "^4.1.17",
     "@tailwindcss/vite": "^4.1.17",
     "react": "^19.2.0",
@@ -17,6 +18,10 @@
     "react-router-dom": "^7.9.6",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.17"
+=======
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+>>>>>>> 538ebfdff0f65edeb7e54ff177ef1015f3963a85
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

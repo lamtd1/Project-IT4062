@@ -1,4 +1,33 @@
+<<<<<<< HEAD
 /client/node_modules
 /client/public
 /middleware/node_modules
 /middleware/.env
+=======
+# Logs/logs
+client/*.log
+client/npm-debug.log*
+client/yarn-debug.log*
+client/yarn-error.log*
+client/pnpm-debug.log*
+client/lerna-debug.log*
+
+client/node_modules
+client/dist
+client/dist-ssr
+client/*.local
+
+# Editor directories and files
+client/.vscode/*
+!client/.vscode/extensions.json
+client/.idea
+client/.DS_Store
+client/*.suo
+client/*.ntvs*
+client/*.njsproj
+client/*.sln
+client/*.sw?
+
+
+middleware/.env
+>>>>>>> 538ebfdff0f65edeb7e54ff177ef1015f3963a85

@@ -4,12 +4,17 @@
   "description": "",
   "main": "bridge.js",
   "scripts": {
+<<<<<<< HEAD
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon bridge.js"
+=======
+    "test": "echo \"Error: no test specified\" && exit 1"
+>>>>>>> 538ebfdff0f65edeb7e54ff177ef1015f3963a85
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+<<<<<<< HEAD
   "type": "module",
   "dependencies": {
     "dotenv": "^17.2.3",
@@ -19,3 +24,7 @@
     "socket.io": "^4.8.1"
   }
 }
+=======
+  "type": "module"
+}
+>>>>>>> 538ebfdff0f65edeb7e54ff177ef1015f3963a85
