@@ -2,3 +2,15 @@
 /client/public
 /middleware/node_modules
 /middleware/.env
+
+# build files
+*.o
+server_app
+test_db
+
+# logs & tools
+server/logs/
+.agent/
+
+# local database
+database/*.db
