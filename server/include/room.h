@@ -61,6 +61,12 @@ int room_update_timer(int room_id);
 // Lấy danh sách phòng (Format string)
 void room_get_list_string(char *buffer);
 
+// FORMAT: "host_flag:username:score,..."
+void room_get_detail_string(int room_id, char *buffer);
+
+int room_handle_answer(int user_id, char *answer, char *result_msg);
+int room_walk_away(int user_id, char *result_msg);
+
 // Lấy phòng theo ID
 Room* room_get_by_id(int room_id);
 // Lấy phòng theo User ID

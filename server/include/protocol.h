@@ -24,13 +24,21 @@
 #define MSG_ELIMINATE 0x24
 #define MSG_SCORE_UPDATE 0x25
 #define MSG_GAME_END 0x26
+#define MSG_GET_ROOMS 0x27
+#define MSG_ROOM_LIST 0x28
+#define MSG_GET_ROOM_DETAIL 0x29
+#define MSG_ROOM_DETAIL 0x2A
 
 #define MSG_LOGOUT 0x30
+#define MSG_LOGOUT 0x30
 #define MSG_LEAVE_ROOM 0x31
+#define MSG_WALK_AWAY 0x2B
 
 
 #define MSG_GET_ONLINE_USERS 0x40
 #define MSG_ONLINE_USERS_RESULT 0x41
+#define MSG_GET_LEADERBOARD 0x45
+#define MSG_LEADERBOARD_LIST 0x46
 
 // Cấu trúc ngừoi dùng trong gói tin
 typedef struct {

@@ -39,6 +39,21 @@ void db_close(sqlite3* db) {
     }
 }
 
+int get_user_score(sqlite3 *db, int user_id) {
+    const char *sql = "SELECT total_score FROM users WHERE id = ?;";
+    sqlite3_stmt *stmt;
+    int score = 0;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK) {
+        sqlite3_bind_int(stmt, 1, user_id);
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            score = sqlite3_column_int(stmt, 0);
+        }
+    }
+    sqlite3_finalize(stmt);
+    return score;
+}
+
 // --- CRUD functions ---
 
 // Trả về user_id (>0) nếu đúng, -1 nếu sai
@@ -123,4 +138,29 @@ void delete_record(sqlite3 *db, char *table, char *condition) {
         printf("Lỗi xóa bản ghi: %s\n", err);
         sqlite3_free(err);
     }
+}
+
+void get_leaderboard(sqlite3 *db, char *buffer) {
+    const char *sql = "SELECT username, total_score FROM users ORDER BY total_score DESC LIMIT 10;";
+    sqlite3_stmt *stmt;
+    buffer[0] = '\0';
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK) {
+        return;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *name = (const char *)sqlite3_column_text(stmt, 0);
+        int score = sqlite3_column_int(stmt, 1);
+        
+        char line[64];
+        sprintf(line, "%s:%d,", name, score);
+        strcat(buffer, line);
+    }
+    
+    // Remove last comma
+    int len = strlen(buffer);
+    if (len > 0 && buffer[len-1] == ',') buffer[len-1] = '\0';
+
+    sqlite3_finalize(stmt);
 }

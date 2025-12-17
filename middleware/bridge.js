@@ -8,7 +8,7 @@ const server = createServer(app);
 const io = new Server(server, {
     cors: {
         origin: "*",
-        methods: ['GET','POST']
+        methods: ['GET', 'POST']
     }
 })
 
@@ -30,25 +30,39 @@ io.on('connection', (webSocket) => {
     })
 
     // Handle chuyển dữ liệu server -> client
+    // Parse messages using newline delimiter
+    let buffer = Buffer.alloc(0);
+
     tcpSocket.on('data', (data) => {
-        const opcode = data[0];
-        const payload = data.slice(1);
-        console.log("------ TCP DATA RECEIVED ------");
-        console.log("Raw Buffer:", data);
-        console.log("Opcode:", opcode);
-        console.log("Payload (bytes):", payload);
-        console.log("Payload (string):", payload.toString());
-        console.log("--------------------------------");
-        
-        webSocket.emit('server_to_client', data)
-    })
+        buffer = Buffer.concat([buffer, data]);
+
+        // Split by newline delimiter
+        let delimiterIndex;
+        while ((delimiterIndex = buffer.indexOf('\n')) !== -1) {
+            // Extract message (without delimiter)
+            const message = buffer.slice(0, delimiterIndex);
+            buffer = buffer.slice(delimiterIndex + 1);
+
+            if (message.length > 0) {
+                const opcode = message[0];
+                const payload = message.slice(1);
+                console.log("------ MESSAGE PARSED ------");
+                console.log("Opcode:", opcode.toString(16));
+                console.log("Payload:", payload.toString());
+                console.log("----------------------------");
+
+                // Emit to WebSocket
+                webSocket.emit('server_to_client', message);
+            }
+        }
+    });
 
     // Handle nếu phía server close
     tcpSocket.on('close', () => {
-        console.log(`C Server closed connection for ${tcpSocket.id}`)    
+        console.log(`C Server closed connection for ${tcpSocket.id}`)
         webSocket.disconnect()
     })
-    
+
     // Handle nếu phía client close
     webSocket.on('disconnect', () => {
         tcpSocket.end()
@@ -65,7 +79,7 @@ io.on('connection', (webSocket) => {
 const PORT = 4000
 server.listen(PORT, () => {
     console.log(`MIDDLEWARE RUNNING ON PORT: `, PORT)
-} )
+})
 
 
 

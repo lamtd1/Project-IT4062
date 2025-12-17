@@ -4,24 +4,19 @@
 #include <time.h>
 
 #define MAX_QUESTIONS_LOAD 100
-#define QUESTION_DURATION 20   // Thời gian 20 giây/câu
-#define GAME_SCORE_BASE 100    // Điểm cơ bản
+#define QUESTION_DURATION 30  // seconds
 
+// Cấu trúc câu hỏi
 typedef struct {
     int id;
-    char content[256];
-    char options[4][100]; // 4 đáp án
-    char correct_answer[5]; // A, B, C, D
+    int difficulty;  // 1=Easy, 2=Medium, 3=Hard
+    char content[512];
+    char options[4][256];
+    char correct_answer[2];
 } Question;
 
-
-#include <sqlite3.h>
-
-// Hàm khởi tạo và load dữ liệu câu hỏi
-int game_init(sqlite3 *db);
-
-// Load câu hỏi từ file text
-int load_questions_from_file(const char *filename);
+// Khởi tạo game (load câu hỏi)
+int game_init(void *db_conn);
 
 // Lấy câu hỏi theo ID
 Question* get_question_by_id(int id);
@@ -32,5 +27,16 @@ int calculate_score(int question_id, char *user_ans, double time_taken);
 
 // Helper: Trộn mảng ID câu hỏi để random cho mỗi phòng
 void shuffle_questions(int *array, int count);
+
+// --- CLASSIC MODE LOGIC ---
+// Get prize amount for a given level (1-15)
+int get_prize_for_level(int level);
+
+// Calculate safe haven reward if answered incorrectly
+int calculate_safe_reward(int current_level);
+
+// --- EXTERN FOR ROOM ACCESS ---
+extern Question all_questions[MAX_QUESTIONS_LOAD];
+extern int total_questions_loaded;
 
 #endif

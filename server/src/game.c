@@ -18,12 +18,24 @@ void shuffle_questions(int *array, int count) {
     }
 }
 
-static Question all_questions[MAX_QUESTIONS_LOAD];
-static int total_questions_loaded = 0;
+Question all_questions[MAX_QUESTIONS_LOAD];
+int total_questions_loaded = 0;
 
 typedef struct {
     Question *q_array;
-    int *count;
+    int *counUser lamtd answered B. Result: CHINH XAC! Ban dang o muc cau hoi 3. Tien thuong: 600
+Client 5 sent OpCode: 22, Payload: D
+User lamtd answered D. Result: SAI ROI! Ra ve voi so tien: 0
+Client 5 sent OpCode: 22, Payload: B
+User lamtd answered B. Result: Ban da bi loai hoac khong trong phong.
+Client 5 sent OpCode: 22, Payload: A
+User lamtd answered A. Result: Ban da bi loai hoac khong trong phong.
+Client 5 sent OpCode: 22, Payload: A
+User lamtd answered A. Result: Ban da bi loai hoac khong trong phong.
+Client 5 sent OpCode: 22, Payload: B
+User lamtd answered B. Result: Ban da bi loai hoac khong trong phong.
+Client 1 (fd=5) disconnected.
+New connection, socket fd: 5t;
 } LoadCtx;
 
 static int load_cb(void *data, int argc, char **argv, char **axColName ) {
@@ -32,26 +44,30 @@ static int load_cb(void *data, int argc, char **argv, char **axColName ) {
     Question *q = &ctx->q_array[*ctx->count];
 
     q->id = atoi(argv[0]);
-    strncpy(q->content, argv[1] ? argv[1] : "", sizeof(q->content));
+    q->difficulty = atoi(argv[1]);
+    strncpy(q->content, argv[2] ? argv[2] : "", sizeof(q->content));
     for (int i = 0; i < 4; i++) {
-        strncpy(q->options[i], argv[i + 2] ? argv[i + 2] : "", sizeof(q->options[i]));
+        strncpy(q->options[i], argv[i + 3] ? argv[i + 3] : "", sizeof(q->options[i]));
     }
-    strncpy(q->correct_answer, argv[6] ? argv[6] : "", sizeof(q->correct_answer));
+    strncpy(q->correct_answer, argv[7] ? argv[7] : "", sizeof(q->correct_answer));
     (*ctx->count)++;
     return 0;
 }
 
-int game_init(sqlite3 *db) {
+int game_init(void *db_conn) {
+    sqlite3 *db = (sqlite3 *)db_conn;
     total_questions_loaded = 0;
     LoadCtx ctx = {all_questions, &total_questions_loaded};
     
-    const char *sql = "SELECT id, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions;";
+    const char *sql = "SELECT id, difficulty, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions;";
     
     char *err = 0;
-    if (sqlite3_exec(db, sql, load_cb, &ctx, &err) != SQLITE_OK) {
-        printf("[GAME] Error loading questions: %s\n", err);
+    int rc = sqlite3_exec(db, sql, load_cb, &ctx, &err);
+    
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", err);
         sqlite3_free(err);
-        return 0;
+        return -1;
     }
     
     printf("[GAME] Successfully loaded %d questions from DB.\n", total_questions_loaded);
@@ -73,15 +89,10 @@ int calculate_score(int question_id, char *user_ans, double time_taken) {
     // So sánh đáp án không phân biệt hoa thường
     if (strcasecmp(user_ans, q->correct_answer) == 0) {
         if (time_taken > QUESTION_DURATION) return 0; // Quá giờ coi như 0 điểm
-        
-        // Công thức: Điểm gốc + (Thời gian còn lại * 10)
-        int time_bonus = (int)((QUESTION_DURATION - time_taken) * 10);
-        if (time_bonus < 0) time_bonus = 0;
-        
-        return time_bonus + GAME_SCORE_BASE;
+        return 1; // CORRECT
     }
     
-    return -1; // Sai
+    return -1; // WRONG
 }
 
 // 1. Logic 50:50 
@@ -154,6 +165,27 @@ void get_expert_advice(int question_id, char *out_str) {
     sprintf(out_str, "Toi la %s den tu %s.\nTheo kien thuc nhieu nam nghien cuu cua toi thi dap an %s la chinh xac.", 
             names[r_n], locs[r_l], q->correct_answer);
 }
+
+// --- CLASSIC MODE PRIZE LADDER ---
+// 15 mốc thưởng tương ứng level 1 - 15
+static const int PRIZE_LADDER[15] = {
+    200, 400, 600, 1000, 2000,         // Level 1 - 5 (Safe Haven: 2000)
+    3000, 6000, 10000, 14000, 22000,   // Level 6 - 10 (Safe Haven: 22000)
+    30000, 40000, 60000, 85000, 150000 // Level 11 - 15 (Max)
+};
+
+int get_prize_for_level(int level) {
+    if (level < 1 || level > 15) return 0;
+    return PRIZE_LADDER[level - 1];
+}
+
+int calculate_safe_reward(int current_level) {
+    // Trả lời sai ở câu hiện tại (đã vượt qua level - 1)
+    if (current_level > 10) return PRIZE_LADDER[9]; // Về mốc 10 (22000)
+    if (current_level > 5) return PRIZE_LADDER[4];  // Về mốc 5 (2000)
+    return 0; // Chưa qua mốc 5 thì về tay trắng
+}
+
 
 
 

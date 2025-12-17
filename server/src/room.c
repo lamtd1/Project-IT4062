@@ -3,6 +3,11 @@
 #include <string.h>
 #include "../include/room.h"
 
+// --- KHAI BÁO THƯ VIỆN ĐỂ SEND ---
+#include <sys/socket.h>
+#include <unistd.h>
+#include "../include/protocol.h"
+
 // --- KHAI BÁO CÁC HÀM TỪ GAME.C ---
 extern void get_5050_options(int question_id, char *out_str);
 extern void get_audience_stats(int question_id, char *out_str);
@@ -17,7 +22,6 @@ void room_system_init(void *db_conn) {
         rooms[i].id = -1; // Đánh dấu phòng trống
         rooms[i].player_count = 0;
         rooms[i].status = ROOM_WAITING;
-        // pthread_mutex_init removed
     }
     game_init(db_conn); // Gọi module Game load câu hỏi
 }
@@ -81,6 +85,7 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
     return 1;
 }
 
+
 int room_leave(int user_id) {
     Room *r = room_get_by_user(user_id);
     if (!r) return 0;
@@ -94,7 +99,27 @@ int room_leave(int user_id) {
     }
 
     if (idx != -1) {
-        // Dồn mảng
+        // Nếu Host thoát -> Kick tất cả
+        if (r->members[idx].is_host) {
+            printf("[ROOM] Host %s left room %d. Kicking all members.\n", r->members[idx].username, r->id);
+            char noti[1];
+            noti[0] = MSG_LEAVE_ROOM;
+            
+            for(int k=0; k < r->player_count; k++) {
+                if (k != idx) { // Gửi cho member khác
+                     if (r->members[k].socket_fd > 0) {
+                         send(r->members[k].socket_fd, noti, 1, 0);
+                     }
+                }
+            }
+            // Reset phòng
+            r->id = -1;
+            r->player_count = 0;
+            r->status = ROOM_WAITING;
+            return 1;
+        }
+        
+        // Nếu không phải host -> remove bình thường
         for (int i = idx; i < r->player_count - 1; i++) {
             r->members[i] = r->members[i+1];
         }
@@ -104,9 +129,6 @@ int room_leave(int user_id) {
         if (r->player_count == 0) {
             r->id = -1;
             r->status = ROOM_WAITING;
-        } else if (idx == 0) {
-            // Nếu chủ phòng thoát -> chuyển quyền cho người kế
-            r->members[0].is_host = 1;
         }
     }
     
@@ -131,13 +153,45 @@ int room_start_game(int room_id, int user_id) {
         r->members[i].is_eliminated = 0;
     }
 
-    // Random câu hỏi
+    // Tạo danh sách câu hỏi theo độ khó
+    int easy_ids[100], medium_ids[100], hard_ids[100];
+    int easy_count = 0, medium_count = 0, hard_count = 0;
+    
+    for (int i = 0; i < total_questions_loaded; i++) {
+        if (all_questions[i].difficulty == 1 && easy_count < 100) {
+            easy_ids[easy_count++] = all_questions[i].id;
+        } else if (all_questions[i].difficulty == 2 && medium_count < 100) {
+            medium_ids[medium_count++] = all_questions[i].id;
+        } else if (all_questions[i].difficulty == 3 && hard_count < 100) {
+            hard_ids[hard_count++] = all_questions[i].id;
+        }
+    }
+    
+    // Shuffle mỗi nhóm
+    shuffle_questions(easy_ids, easy_count);
+    shuffle_questions(medium_ids, medium_count);
+    shuffle_questions(hard_ids, hard_count);
+    
+    // Lấy 5 câu từ mỗi nhóm
+    int idx = 0;
+    for (int i = 0; i < 5 && i < easy_count; i++) {
+        r->question_ids[idx++] = easy_ids[i];
+    }
+    for (int i = 0; i < 5 && i < medium_count; i++) {
+        r->question_ids[idx++] = medium_ids[i];
+    }
+    for (int i = 0; i < 5 && i < hard_count; i++) {
+        r->question_ids[idx++] = hard_ids[i];
+    }
+    
+    // Shuffle lại thứ tự 15 câu
     shuffle_questions(r->question_ids, 15);
     r->question_start_time = time(NULL);
 
-    printf("[ROOM] Room %d STARTED\n", room_id);
+    printf("[ROOM] Room %d STARTED with %d questions (5 easy, 5 medium, 5 hard)\n", room_id, idx);
     return 1;
 }
+
 
 Room* room_get_by_id(int room_id) {
     if (room_id >= 0 && room_id < MAX_ROOMS && rooms[room_id].id != -1)
@@ -240,4 +294,92 @@ void room_get_list_string(char *buffer) {
     // Remove last comma
     int list_len = strlen(buffer);
     if (list_len > 0) buffer[list_len - 1] = '\0';
+}
+
+// FORMAT: "host_flag:username:score,..."
+void room_get_detail_string(int room_id, char *buffer) {
+    buffer[0] = '\0';
+    Room *r = room_get_by_id(room_id);
+    if (!r) return;
+    
+    for (int i = 0; i < r->player_count; i++) {
+        char temp[128];
+        sprintf(temp, "%d:%s:%d,", 
+            r->members[i].is_host,
+            r->members[i].username,
+            r->members[i].score
+        );
+        strcat(buffer, temp);
+    }
+    
+    int len = strlen(buffer);
+    if (len > 0) buffer[len - 1] = '\0';
+}
+
+int room_handle_answer(int user_id, char *answer, char *result_msg) {
+    Room *r = room_get_by_user(user_id);
+    if (!r || r->status != ROOM_PLAYING) {
+        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        return 0; // Error
+    }
+
+    int idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].user_id == user_id) { idx = i; break; }
+    }
+    if (idx == -1 || r->members[idx].is_eliminated) {
+        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        return 0; 
+    }
+
+    int q_id = r->question_ids[r->current_question_idx];
+    double elapsed = difftime(time(NULL), r->question_start_time);
+    
+    // Check answer via Game module
+    // Note: calculate_score now returns 1 (correct), -1 (wrong), 0 (timeout)
+    int res = calculate_score(q_id, answer, elapsed);
+    
+    // Current Level: 1..15
+    int current_level = r->current_question_idx + 1; 
+
+    if (res == 1) {
+        // CORRECT
+        int prize = get_prize_for_level(current_level);
+        r->members[idx].score = prize;
+        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Tien thuong: %d", current_level, prize);
+        
+        // Logic: Nếu đây là mode Single Player (hoặc Multiplayer trả lời song song), 
+        // ta không cần đợi hết giờ mới qua câu. Nhưng để đồng bộ Multiplayer, ta thường đợi Timer.
+        // Tạm thời Logic hiện tại: User trả lời xong -> Gửi kết quả cho User đó -> Server vẫn đợi Timer hết để chuyển câu (Cho phép người khác trả lời).
+        // Nếu muốn chuyển ngay khi tất cả đã trả lời: Cần check thêm.
+        
+        return 1;
+    } else {
+        // WRONG or TIMEOUT
+        int safe_prize = calculate_safe_reward(current_level);
+        r->members[idx].score = safe_prize;
+        r->members[idx].is_eliminated = 1; // Bị loại khỏi vòng chiến đấu tiếp theo
+        
+        if (res == 0) sprintf(result_msg, "HET GIO! Ra ve voi so tien: %d", safe_prize);
+        else sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d", safe_prize);
+        
+        return 2; // Eliminated
+    }
+}
+
+int room_walk_away(int user_id, char *result_msg) {
+    Room *r = room_get_by_user(user_id);
+    if (!r || r->status != ROOM_PLAYING) return 0;
+    
+    int idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].user_id == user_id) { idx = i; break; }
+    }
+    if (idx == -1 || r->members[idx].is_eliminated) return 0;
+
+    // Dừng cuộc chơi: Giữ nguyên điểm số hiện tại
+    r->members[idx].is_eliminated = 1; // Coi như dừng, không tham gia câu sau
+    sprintf(result_msg, "Ban da dung cuoc choi. Tong tien thuong: %d", r->members[idx].score);
+    
+    return 1;
 }

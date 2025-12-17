@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import io from 'socket.io-client';
-import { BrowserRouter, Routes, Route, useNavigate, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+
+// Import components
+import Leaderboard from './components/Leaderboard';
+import RoomListPage from './components/RoomListPage';
+import CreateRoomPanel from './components/CreateRoomPanel';
+import RoomPage from './components/RoomPage';
+import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
+import HomePage from './components/HomePage';
+import GameUI from './components/GameUI';
 
 // --- CONFIGURATION ---
 const socket = io('http://localhost:4000');
@@ -23,344 +33,220 @@ const OPS = {
 
   GET_ROOMS: 0x27,
   ROOM_LIST: 0x28,
+  GET_ROOM_DETAIL: 0x29,
+  ROOM_DETAIL: 0x2A,
+
+  GET_LEADERBOARD: 0x45,
+  LEADERBOARD_LIST: 0x46,
 };
-
-// --- COMPONENTS ---
-
-const RoomListPage = ({ rooms, onJoin, onCreate, onBack }) => (
-  <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl">
-    <div className="flex justify-between items-center mb-6">
-      <h1 className="text-2xl font-bold text-gray-800">Danh sách phòng</h1>
-      <div className="space-x-2">
-        <button onClick={onCreate} className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-medium text-sm">
-          + Tạo Phòng
-        </button>
-        <button onClick={onBack} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium text-sm">
-          Quay lại
-        </button>
-      </div>
-    </div>
-
-    <div className="overflow-y-auto max-h-[400px]">
-      {rooms.length === 0 ? (
-        <p className="text-center text-gray-500 py-8">Chưa có phòng nào. Hãy tạo phòng mới!</p>
-      ) : (
-        <div className="grid gap-3">
-          {rooms.map((room) => (
-            <div key={room.id} className="flex justify-between items-center p-4 border border-gray-100 rounded-xl hover:bg-blue-50 transition bg-gray-50">
-              <div>
-                <h3 className="font-bold text-gray-800">{room.name}</h3>
-                <p className="text-xs text-gray-500">ID: {room.id} • {room.status === '0' ? 'Minh bach' : 'Dang choi'}</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className={`text-sm font-semibold ${room.count >= 4 ? 'text-red-500' : 'text-green-500'}`}>
-                  {room.count}/4
-                </span>
-                <button
-                  onClick={() => onJoin(room.id)}
-                  disabled={room.count >= 4 || room.status !== '0'}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm text-white transition shadow-sm
-                                        ${(room.count >= 4 || room.status !== '0') ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}
-                                    `}
-                >
-                  {room.count >= 4 ? 'Đầy' : 'Vào Ngay'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </div>
-);
-
-const RoomPage = ({ roomInfo, onLeave }) => (
-  <div className="bg-white p-8 rounded-2xl shadow-lg max-w-lg w-full text-center">
-    <h1 className="text-2xl font-bold text-blue-600 mb-2">Phòng chờ</h1>
-    <p className="text-lg font-semibold text-gray-800">
-      {roomInfo.name || `Room #${roomInfo.id}`}
-    </p>
-    <div className="mt-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
-      <p className="text-gray-500 text-sm mb-2">Trạng thái</p>
-      <div className="flex items-center justify-center space-x-2">
-        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-        <span className="font-medium text-gray-700">Đang đợi người chơi...</span>
-      </div>
-    </div>
-
-    <button
-      onClick={onLeave}
-      className="mt-8 px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition"
-    >
-      Rời phòng
-    </button>
-  </div>
-);
-
-const LoginPage = ({ username, setUsername, password, setPassword, onSubmit, status }) => (
-  <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm">
-    <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Đăng Nhập</h1>
-    <p className="text-sm text-gray-500 text-center mb-6">Chào mừng bạn quay trở lại</p>
-
-    {status.msg && (
-      <div className={`mb-4 p-3 rounded-lg text-sm text-center ${status.type === 'success' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
-        {status.msg}
-      </div>
-    )}
-
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Tên tài khoản</label>
-      <input
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
-        type="text"
-        placeholder="Nhập username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
-    </div>
-
-    <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-      <input
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
-        type="password"
-        placeholder="Nhập password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-    </div>
-
-    <button
-      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold transition shadow-md"
-      onClick={() => onSubmit(OPS.LOGIN)}
-    >
-      Đăng nhập
-    </button>
-
-    <p className="text-center text-sm text-gray-600 mt-4">
-      Chưa có tài khoản?{" "}
-      <Link className="text-blue-600 font-medium hover:underline" to="/register">
-        Đăng ký ngay
-      </Link>
-    </p>
-  </div>
-);
-
-const RegisterPage = ({ username, setUsername, password, setPassword, onSubmit, status }) => (
-  <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-sm">
-    <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Tạo Tài Khoản</h1>
-    <p className="text-sm text-gray-500 text-center mb-6">Tham gia đấu trường trí tuệ</p>
-
-    {status.msg && (
-      <div className={`mb-4 p-3 rounded-lg text-sm text-center ${status.type === 'success' ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-red-100 text-red-700 border border-red-300'}`}>
-        {status.msg}
-      </div>
-    )}
-
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Tên tài khoản</label>
-      <input
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
-        type="text"
-        placeholder="Chọn username"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-      />
-    </div>
-
-    <div className="mb-6">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
-      <input
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
-        type="password"
-        placeholder="Tạo password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-    </div>
-
-    <button
-      className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg font-semibold transition shadow-md"
-      onClick={() => onSubmit(OPS.REGISTER)}
-    >
-      Đăng ký
-    </button>
-
-    <p className="text-center text-sm text-gray-600 mt-4">
-      Đã có tài khoản?{" "}
-      <Link className="text-blue-600 font-medium hover:underline" to="/">
-        Đăng nhập
-      </Link>
-    </p>
-  </div>
-);
-
-const HomePage = ({ username, onLogout, onPlayNow }) => (
-  <div className="bg-white p-8 rounded-2xl shadow-lg max-w-lg w-full text-center">
-    <div className="w-20 h-20 bg-blue-600 text-white rounded-full mx-auto flex items-center justify-center text-3xl font-bold shadow-md">
-      {username ? username.charAt(0).toUpperCase() : '?'}
-    </div>
-
-    <h1 className="text-2xl font-bold mt-4 text-gray-900">Xin chào, {username}!</h1>
-    <p className="text-sm text-gray-500 mt-2">Bạn đã kết nối thành công tới Server C.</p>
-
-    <div className="grid grid-cols-1 gap-4 mt-8">
-      <button
-        onClick={onPlayNow}
-        className="bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold text-lg transition shadow-md transform hover:scale-105"
-      >
-        Vào Chơi Ngay
-      </button>
-    </div>
-
-    <button
-      className="text-red-500 hover:text-red-700 hover:underline mt-8 font-medium text-sm transition"
-      onClick={onLogout}
-    >
-      Đăng xuất
-    </button>
-  </div>
-);
 
 // --- MAIN LOGIC CONTAINER ---
 
 const GameContent = () => {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
+  const [userId, setUserId] = useState(null);
+  const [score, setScore] = useState(0);
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState({ msg: '', type: '' });
+
+  // Game State
+  const [gameStatus, setGameStatus] = useState('LOBBY'); // LOBBY, PLAYING, FINISHED
+  const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [gameResult, setGameResult] = useState("");
+  const [renderKey, setRenderKey] = useState(0); // Force re-render counter
+
   const [roomInfo, setRoomInfo] = useState({ id: null, name: '' });
+  const [roomMembers, setRoomMembers] = useState([]);
+  const [isHost, setIsHost] = useState(false);
+
   const [rooms, setRooms] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
+    // Poll rooms and leaderboard periodically if on home screen
+    const interval = setInterval(() => {
+      if (window.location.pathname === '/home') {
+        const p1 = new Uint8Array(1); p1[0] = OPS.GET_ROOMS;
+        socket.emit("client_to_server", p1);
+
+        // Stagger leaderboard request to avoid sticky packets
+        setTimeout(() => {
+          const p2 = new Uint8Array(1); p2[0] = OPS.GET_LEADERBOARD;
+          socket.emit("client_to_server", p2);
+        }, 500);
+      }
+      else if (window.location.pathname === '/room') {
+        // Poll room details
+        if (roomInfo.id !== null && roomInfo.id !== undefined) { // Check valid ID (0 is valid)
+          const textData = `${roomInfo.id}`;
+          const encoder = new TextEncoder();
+          const stringBytes = encoder.encode(textData);
+          const packet = new Uint8Array(1 + stringBytes.length);
+          packet[0] = OPS.GET_ROOM_DETAIL;
+          packet.set(stringBytes, 1);
+          socket.emit("client_to_server", packet);
+        }
+      }
+    }, 5000); // Poll every 5s (reduced freq from 2s)
+
     socket.on('server_to_client', (data) => {
       const view = new Uint8Array(data);
       const opcode = view[0];
+      const textDecoder = new TextDecoder();
 
       if (opcode === OPS.LOGIN_SUCCESS) {
+        // Payload: "ID:Score"
+        const payload = textDecoder.decode(view.slice(1));
+        const [idStr, scoreStr] = payload.split(':');
+
+        setUserId(parseInt(idStr));
+        setScore(parseInt(scoreStr || '0'));
+
         setStatus({ msg: "Đăng nhập thành công!", type: 'success' });
-        setTimeout(() => navigate('/home'), 1000);
+        setTimeout(() => navigate('/home'), 500);
       }
       else if (opcode === OPS.LOGIN_FAILED) {
         setStatus({ msg: "Sai tài khoản hoặc mật khẩu!", type: 'error' });
       }
       else if (opcode === OPS.REGISTER_SUCCESS) {
-        setStatus({ msg: "Đăng ký thành công! Đang chuyển trang...", type: 'success' });
-        setTimeout(() => {
-          setStatus({ msg: '', type: '' });
-          navigate('/');
-        }, 1500);
+        setStatus({ msg: "Đăng ký thành công!", type: 'success' });
+        setTimeout(() => { setStatus({ msg: '', type: '' }); navigate('/'); }, 1500);
       }
-      else if (opcode === OPS.REGISTER_FAILED) {
-        setStatus({ msg: "Tài khoản đã tồn tại.", type: 'error' });
-      }
-      else if (opcode === OPS.ALREADY_LOGIN) {
-        setStatus({ msg: "Bạn đã đăng nhập rồi!", type: 'error' });
-      }
-      else if (opcode === OPS.SERVER_FULL) {
-        setStatus({ msg: "Server đã đầy!", type: 'error' });
-      }
+      else if (opcode === OPS.REGISTER_FAILED) setStatus({ msg: "Tài khoản đã tồn tại.", type: 'error' });
+      else if (opcode === OPS.ALREADY_LOGIN) setStatus({ msg: "Bạn đã đăng nhập rồi!", type: 'error' });
+      else if (opcode === OPS.SERVER_FULL) setStatus({ msg: "Server đã đầy!", type: 'error' });
+
       // --- ROOM RESPONSE ---
       else if (opcode === OPS.ROOM_CREATE) {
         const success = view[1];
         if (success) {
-          setStatus({ msg: "Tạo phòng thành công!", type: 'success' });
+          const rId = view[2];
+          setRoomInfo(prev => ({ ...prev, id: rId }));
+          setIsHost(true);
+          setStatus({ msg: `Tạo phòng ${rId} thành công!`, type: 'success' });
           navigate('/room');
-        } else {
-          setStatus({ msg: "Tạo phòng thất bại!", type: 'error' });
-        }
+        } else setStatus({ msg: "Tạo phòng thất bại!", type: 'error' });
       }
       else if (opcode === OPS.ROOM_JOIN) {
         const success = view[1];
         if (success) {
-          setStatus({ msg: "Vào phòng thành công!", type: 'success' });
+          setIsHost(false);
           navigate('/room');
-        } else {
-          setStatus({ msg: "Không tìm thấy phòng hoặc phòng đầy!", type: 'error' });
+        } else setStatus({ msg: "Vào phòng thất bại!", type: 'error' });
+      }
+      else if (opcode === OPS.LEAVE_ROOM) {
+        // Server Kick / Host Left
+        alert("Phòng đã bị hủy do chủ phòng thoát!");
+        navigate('/home');
+        setRoomMembers([]);
+        setRoomInfo({});
+        setGameStatus('LOBBY');
+      }
+
+      // --- GAME RESPONSES ---
+      else if (opcode === 0x21) { // MSG_QUESTION
+        const payload = textDecoder.decode(view.slice(1));
+        // Format: "Level|Content|A|B|C|D|Duration"
+        const parts = payload.split('|');
+        if (parts.length >= 7) {
+          const [lvl, content, a, b, c, d, dur] = parts;
+          // Create a completely new object to force React re-render
+          const newQuestion = {
+            id: parseInt(lvl),
+            content: content,
+            answers: [a, b, c, d]
+          };
+          console.log(`[GAME] Question ${lvl}: ${content}`);
+          setCurrentQuestion(newQuestion);
+          setTimeLeft(parseInt(dur));
+          setGameStatus('PLAYING');
+          setRenderKey(prev => prev + 1); // Force re-render
         }
       }
+      else if (opcode === 0x23) { // MSG_ANSWER_RESULT
+        const payload = textDecoder.decode(view.slice(1));
+        // Don't use alert - it blocks the UI and prevents next question from showing
+        console.log('[ANSWER RESULT]', payload);
+        // Could add a toast notification here instead
+      }
+      else if (opcode === 0x26) { // MSG_GAME_END
+        const payload = textDecoder.decode(view.slice(1));
+        setGameStatus('FINISHED');
+        setGameResult(payload);
+      }
       else if (opcode === OPS.ROOM_LIST) {
-        // Payload: "id:name:count:status,id2..."
-        const textDecoder = new TextDecoder();
         const listStr = textDecoder.decode(view.slice(1));
-
-        if (!listStr) {
-          setRooms([]);
-        } else {
-          const items = listStr.split(',');
-          const parsedRooms = items.map(item => {
-            const [id, name, count, status] = item.split(':');
-            return { id, name, count, status };
-          });
-          setRooms(parsedRooms);
+        if (!listStr) setRooms([]);
+        else {
+          setRooms(listStr.split(',').map(item => {
+            const [id, name, count, rStatus] = item.split(':');
+            return { id, name, count, status: rStatus };
+          }));
         }
-        navigate('/rooms');
+      }
+      else if (opcode === OPS.LEADERBOARD_LIST) {
+        const listStr = textDecoder.decode(view.slice(1));
+        if (!listStr) setLeaderboard([]);
+        else {
+          setLeaderboard(listStr.split(',').map(item => {
+            const [name, sc] = item.split(':');
+            return { name, score: sc };
+          }));
+        }
+      }
+      else if (opcode === OPS.ROOM_DETAIL) {
+        const listStr = textDecoder.decode(view.slice(1));
+        if (!listStr) setRoomMembers([]);
+        else {
+          const mems = listStr.split(',').map(item => {
+            const [isH, name, sc] = item.split(':'); // "host_flag:username:score"
+            return { isHost: isH === '1', username: name, score: sc };
+          });
+          setRoomMembers(mems);
+
+          // Verify host logic locally ?
+          // If I am in members list and isHost=1 -> I am host.
+        }
       }
     });
 
-    return () => socket.off('server_to_client');
-  }, [navigate]);
+    return () => { socket.off('server_to_client'); clearInterval(interval); };
+  }, [navigate, roomInfo.id]);
 
   const handleSubmit = (opcode) => {
-    if (!username || !password) {
-      setStatus({ msg: "Vui lòng nhập đầy đủ thông tin", type: 'error' });
-      return;
-    }
-
-    const textData = `${username} ${password}`;
+    if (!username || !password) return setStatus({ msg: "Nhập đủ thông tin", type: 'error' });
+    const text = `${username} ${password}`;
     const encoder = new TextEncoder();
-    const stringBytes = encoder.encode(textData);
-
-    const packet = new Uint8Array(1 + stringBytes.length);
+    const bytes = encoder.encode(text);
+    const packet = new Uint8Array(1 + bytes.length);
     packet[0] = opcode;
-    packet.set(stringBytes, 1);
-
+    packet.set(bytes, 1);
     socket.emit("client_to_server", packet);
   };
 
-  const handleLogout = () => {
-    const packet = new Uint8Array(1);
-    packet[0] = OPS.LOGOUT;
-    socket.emit("client_to_server", packet);
-
-    setUsername('');
-    setPassword('');
-    setStatus({ msg: '', type: '' });
-    navigate('/');
-  };
-
-  const handleGetRooms = () => {
-    const packet = new Uint8Array(1);
-    packet[0] = OPS.GET_ROOMS;
-    socket.emit("client_to_server", packet);
-  };
-
-  const handleCreateRoom = () => {
-    const roomName = prompt("Nhập tên phòng muốn tạo:");
-    if (!roomName) return;
-
+  const handleCreateRoom = (roomName) => {
     const encoder = new TextEncoder();
-    const stringBytes = encoder.encode(roomName);
-    const packet = new Uint8Array(1 + stringBytes.length);
+    const bytes = encoder.encode(roomName);
+    const packet = new Uint8Array(1 + bytes.length);
     packet[0] = OPS.ROOM_CREATE;
-    packet.set(stringBytes, 1);
+    packet.set(bytes, 1);
     socket.emit("client_to_server", packet);
-
     setRoomInfo({ id: 0, name: roomName });
+    setGameStatus('LOBBY'); // Reset game state
   };
 
   const handleJoinRoom = (roomId) => {
-    const encoder = new TextEncoder();
-    // roomId is string from parsed list
-    const stringBytes = encoder.encode(roomId);
-    const packet = new Uint8Array(1 + stringBytes.length);
+    const packet = new Uint8Array(1 + roomId.length);
     packet[0] = OPS.ROOM_JOIN;
-    packet.set(stringBytes, 1);
+    const encoder = new TextEncoder();
+    packet.set(encoder.encode(roomId), 1);
     socket.emit("client_to_server", packet);
 
-    // Find room name to display
     const r = rooms.find(rm => rm.id === roomId);
-    setRoomInfo({ id: roomId, name: r ? r.name : '' });
+    setRoomInfo({ id: roomId, name: r ? r.name : `Phòng ${roomId}` });
+    setGameStatus('LOBBY'); // Reset game state
   };
 
   const handleLeaveRoom = () => {
@@ -368,31 +254,91 @@ const GameContent = () => {
     packet[0] = OPS.LEAVE_ROOM;
     socket.emit("client_to_server", packet);
     navigate('/home');
+    setRoomMembers([]);
+    setGameStatus('LOBBY'); // Reset game state
+  };
+
+  const handleLogout = () => {
+    const packet = new Uint8Array(1);
+    packet[0] = OPS.LOGOUT;
+    socket.emit("client_to_server", packet);
+    // Reset all state
+    setUsername('');
+    setUserId(null);
+    setScore(0);
+    setGameStatus('LOBBY');
+    setRoomInfo({ id: null, name: '' });
+    setRoomMembers([]);
+    navigate('/');
+  };
+
+  const handleGetLeaderboard = () => {
+    if (!socket) return;
+    const packet = new Uint8Array(1);
+    packet[0] = 0x45; // MSG_GET_LEADERBOARD
+    socket.emit("client_to_server", packet);
+  };
+
+  const handleStartGame = () => {
+    const packet = new Uint8Array(1);
+    packet[0] = 0x20; // MSG_GAME_START
+    socket.emit("client_to_server", packet);
+    console.log("Sent GAME_START to server");
+  };
+
+  const handleAnswer = (ansChar) => {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(ansChar);
+    const packet = new Uint8Array(1 + bytes.length);
+    packet[0] = 0x22; // MSG_ANSWER (0x22)
+    packet.set(bytes, 1);
+    socket.emit("client_to_server", packet);
   };
 
   const commonProps = { username, setUsername, password, setPassword, onSubmit: handleSubmit, status };
 
   return (
-    <div className="min-h-screen flex justify-center items-center bg-gray-100 font-sans">
+    <div className="min-h-screen flex justify-center items-center bg-blue-50 font-sans p-4">
       <Routes>
         <Route path="/" element={<LoginPage {...commonProps} />} />
         <Route path="/register" element={<RegisterPage {...commonProps} />} />
         <Route path="/home" element={
           <HomePage
             username={username}
+            score={score}
             onLogout={handleLogout}
-            onPlayNow={handleGetRooms}
-          />
-        } />
-        <Route path="/rooms" element={
-          <RoomListPage
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
             rooms={rooms}
-            onJoin={handleJoinRoom}
-            onCreate={handleCreateRoom}
-            onBack={() => navigate('/home')}
+            leaderboard={leaderboard}
+            onRequestLeaderboard={handleGetLeaderboard}
           />
         } />
-        <Route path="/room" element={<RoomPage roomInfo={roomInfo} onLeave={handleLeaveRoom} />} />
+        <Route path="/room" element={
+          gameStatus === 'LOBBY' ? (
+            <RoomPage
+              roomInfo={roomInfo}
+              members={roomMembers}
+              isHost={isHost}
+              onLeave={handleLeaveRoom}
+              onStart={handleStartGame}
+            />
+          ) : gameStatus === 'FINISHED' ? (
+            <div className="bg-white p-8 rounded-xl shadow-xl text-center">
+              <h2 className="text-3xl font-bold text-gray-800 mb-4">Kết Thúc!</h2>
+              <p className="text-xl text-blue-600 mb-6">{gameResult}</p>
+              <button onClick={handleLeaveRoom} className="bg-gray-500 text-white px-6 py-2 rounded-lg">Thoát về Sảnh</button>
+            </div>
+          ) : (
+            <GameUI
+              key={renderKey} // Force re-render using counter
+              currentQuestion={currentQuestion}
+              timeLeft={timeLeft}
+              handleAnswer={handleAnswer}
+              socket={socket}
+            />
+          )
+        } />
       </Routes>
     </div>
   );
