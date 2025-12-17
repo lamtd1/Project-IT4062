@@ -1,23 +1,13 @@
-CFLAGS = -Wno-implicit-function-declaration
+CC = gcc
+CFLAGS = -I../include -Wall
+LIBS = -lsqlite3
 
-# all: final
+# Biên dịch tất cả các file cần thiết
+SRCS = database.c game.c
+TARGET = game_app
 
-# final: main.o client.o
-# 	echo "Linking and producing final"
-# 	gcc $(CFLAGS) main.o client.o -o final
-
-# main.o: main.c
-# 	gcc $(CFLAGS) -c main.c
-# client.o: client.c
-# 	gcc $(CFLAGS) -c client.c
-
-
-server: main.o
-	gcc main.o -o server
-
-client: client.o
-	gcc client.o -o client
-
+all:
+	$(CC) $(CFLAGS) $(SRCS) -o $(TARGET) $(LIBS)
 
 clean:
-	rm -rf *.o final server client
+	rm -f $(TARGET)

@@ -8,6 +8,8 @@
 #include <poll.h>
 #include <errno.h>
 
+#include "database.h"
+
 #define MSG_LOGIN 0x01
 #define MSG_REGISTER 0x02
 #define MSG_LOGIN_SUCCESS 0x03
