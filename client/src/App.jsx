@@ -10,8 +10,12 @@ const OPS = {
   REGISTER: 0x02,
   LOGIN_SUCCESS: 0x03,
   LOGIN_FAILED: 0x04,
-  REGISTER_SUCCESS: 0x05,
-  REGISTER_FAILED: 0x06,
+  ALREADY_LOGIN: 0x05,
+  REGISTER_SUCCESS: 0x06,
+  REGISTER_FAILED: 0x07,
+  SERVER_FULL: 0x08,
+
+  LOGOUT: 0x30,
 };
 
 // --- COMPONENTS ---
@@ -157,19 +161,25 @@ const GameContent = () => {
       if (opcode === OPS.LOGIN_SUCCESS) {
         setStatus({ msg: "Đăng nhập thành công!", type: 'success' });
         setTimeout(() => navigate('/home'), 1000);
-      } 
+      }
       else if (opcode === OPS.LOGIN_FAILED) {
         setStatus({ msg: "Sai tài khoản hoặc mật khẩu!", type: 'error' });
-      } 
+      }
       else if (opcode === OPS.REGISTER_SUCCESS) {
         setStatus({ msg: "Đăng ký thành công! Đang chuyển trang...", type: 'success' });
         setTimeout(() => {
-            setStatus({ msg: '', type: '' });
-            navigate('/');
+          setStatus({ msg: '', type: '' });
+          navigate('/');
         }, 1500);
-      } 
+      }
       else if (opcode === OPS.REGISTER_FAILED) {
         setStatus({ msg: "Tài khoản đã tồn tại.", type: 'error' });
+      }
+      else if (opcode === OPS.ALREADY_LOGIN) {
+        setStatus({ msg: "Bạn đã đăng nhập rồi!", type: 'error' });
+      }
+      else if (opcode === OPS.SERVER_FULL) {
+        setStatus({ msg: "Server đã đầy!", type: 'error' });
       }
     });
 
@@ -194,6 +204,10 @@ const GameContent = () => {
   };
 
   const handleLogout = () => {
+    const packet = new Uint8Array(1);
+    packet[0] = OPS.LOGOUT;
+    socket.emit("client_to_server", packet);
+
     setUsername('');
     setPassword('');
     setStatus({ msg: '', type: '' });

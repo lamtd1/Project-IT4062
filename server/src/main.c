@@ -9,57 +9,22 @@
 #include <errno.h>
 
 #include "database.h"
-
-#define MSG_LOGIN 0x01
-#define MSG_REGISTER 0x02
-#define MSG_LOGIN_SUCCESS 0x03
-#define MSG_LOGIN_FAILED 0x04
-#define MSG_REGISTER_SUCCESS 0x05
-#define MSG_REGISTER_FAILED 0x06
-#define MSG_SERVER_FULL 0x07
-
-#define MSG_GET_ONLINE_USERS 0x08
-#define MSG_ONLINE_USERS_RESULT 0x09
-
-#define MSG_ROOM_CREATE 0x10
-#define MSG_ROOM_JOIN 0x11
-#define MSG_ROOM_UPDATE 0x12
-#define MSG_ROOM_INVITE 0x13
-
-#define MSG_GAME_START 0x20
-#define MSG_QUESTION 0x21
-#define MSG_ANSWER 0x22
-#define MSG_ANSWER_RESULT 0x23
-#define MSG_ELIMINATE 0x24
-#define MSG_SCORE_UPDATE 0x25
-#define MSG_GAME_END 0x26
-
-#define MSG_LOGOUT 0x30
-#define MSG_LEAVE_ROOM 0x31
+#include "protocol.h"
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define MAX_CLIENTS 10
+#define MAX_CLIENTS 100
 
-typedef struct {
-    char username[50];
-    char password[50];
-} User;
-
-typedef struct {
-    int socket_fd;
-    char username[50];
-    int is_logged_in;
-} Session;
 
 User users[MAX_CLIENTS];
+Session sessions[MAX_CLIENTS+1];
 int user_count = 0;
 
-Session sessions[MAX_CLIENTS+1];
 void init_session() {
     for (int i = 0; i < MAX_CLIENTS + 1; i++){
         sessions[i].socket_fd = -1;
         sessions[i].is_logged_in = 0;
+        sessions[i].user_id = -1;
         strcpy(sessions[i].username, "");
     }
 }
@@ -98,35 +63,6 @@ void handle_get_online_users(int client_fd, struct pollfd* fds) {
     send(client_fd, buffer, 1 + strlen(list_ptr), 0);
 }
 
-
-
-void load_users_from_db() {
-    FILE *f = fopen("users.txt", "r");
-    if (f == NULL ) return;
-
-    user_count = 0;
-    // DOC TRONG File
-    while(fscanf(f, "%s %s", users[user_count].username, users[user_count].password) != EOF) {
-        user_count += 1;
-        if(user_count >= MAX_CLIENTS) break;
-    }
-
-    fclose(f);
-    printf("Loaded %d users from database.\n", user_count);
-
-}
-
-void save_user_to_db(char *username, char *password) {
-    FILE *f = fopen("users.txt", "a");
-    if (f == NULL) {
-        perror("CANNOT OPEN FILE");
-        return;
-    }
-    // Luu vao trong File
-    fprintf(f, "%s %s", username, password);
-    fclose(f);
-}
-
 int find_user(char *username){
     for (int i = 0; i < user_count; i ++){
         if(strcmp(users[i].username, username) == 0) return i;
@@ -134,53 +70,62 @@ int find_user(char *username){
     return -1;
 }
 
-void handle_register(int client_fd, char *payload) {
+// DONE
+void handle_register(sqlite3 *db, int client_fd, char *payload) {
     char username[50], password[50];
     if (sscanf(payload, "%s %s", username, password) < 2) return;
 
     char response[1];
-    if (find_user(username) != -1) {
-        response[0] = MSG_REGISTER_FAILED;
-    } else {
-        strcpy(users[user_count].username, username);
-        strcpy(users[user_count].password, password);
-        user_count++;
+    int success = add_user(db, username, password);
 
-        save_user_to_db(username, password);
-
+    if(success) {
         response[0] = MSG_REGISTER_SUCCESS;
-        printf("User registered: %s\n", username);
+        printf("New user registered: %s\n", username);    
+    } else {
+        response[0] = MSG_REGISTER_FAILED;
+        printf("Register failed (User exists): %s\n", username);
     }
     send(client_fd, response, 1, 0);
 }
 
-void handle_login(int client_fd, int session_index, char *payload) {
+// DONE
+void handle_login(sqlite3* db,int client_fd, int session_index, char *payload) {
     char username[50], password[50];
     if (sscanf(payload, "%s %s", username, password) < 2) return;
     char response[1];
 
-    int user_id = find_user(username);
-
-    if(user_id == -1 ||strcmp(users[user_id].password, password) != 0){
-        response[0] = MSG_LOGIN_FAILED;
-        send(client_fd, response, 1, 0);
-    }
     if(is_user_online(username)) {
-        response[0] = MSG_LOGIN_FAILED;
+        response[0] = MSG_ALREADY_LOGIN;
         send(client_fd, response, 1, 0);
+        return;
     }
 
-    sessions[session_index].is_logged_in = 1;
-    strcpy(sessions[session_index].username, username);
-    sessions[session_index].socket_fd = client_fd;
+    int user_id = verify_user(db, username, password);
+    if (user_id > 0) {
+        sessions[session_index].is_logged_in = 1;
+        sessions[session_index].socket_fd = client_fd;
+        sessions[session_index].user_id = user_id;
+        strcpy(sessions[session_index].username, username);
 
-    response[0] = MSG_LOGIN_SUCCESS;
-    printf("Session Created: User '%s' on FD %d\n", username, client_fd);
+        response[0] = MSG_LOGIN_SUCCESS;
+        printf("User '%s' logged in (ID: %d) on session slot %d\n", username, user_id, session_index);
+    } else {
+        response[0] = MSG_LOGIN_FAILED;
+        printf("User '%s' login failed\n", username);
+    }
     send(client_fd, response, 1, 0);
+    
 }
 
 int main(){
-    load_users_from_db();
+    sqlite3 *db = db_init("../../database/database.db");
+    if(!db) {
+        fprintf(stderr, "Failed to connect to database\n");
+        return -1;
+    }
+
+    init_session();
+
 
     char buffer[BUFFER_SIZE];
     int server_fd, new_socket, i;
@@ -277,15 +222,16 @@ int main(){
             // Chỉ kiểm tra slot có client
             if(fds[i].fd != -1 && (fds[i].revents & POLLIN)){
                 int sd = fds[i].fd;
-                int valread;
+                int valread = recv(sd, buffer, BUFFER_SIZE - 1, 0);
 
                 // Read trả về 0 -> Client ngắt kết nối
-                if((valread = recv(sd, buffer, BUFFER_SIZE - 1, 0)) == 0){
+                if(valread == 0){
                     printf("Client %d (fd=%d) disconnected.\n", i, sd);
 
                     sessions[i].is_logged_in = 0;
                     strcpy(sessions[i].username, "");
                     sessions[i].socket_fd = -1;
+                    sessions[i].user_id = -1;
 
                     close(sd);
                     fds[i].fd = -1;
@@ -301,21 +247,23 @@ int main(){
                     // MOST IMPORTANT 
                     switch (opcode) {
                         case MSG_LOGIN:
-                            handle_login(sd, i, payload);
+                            handle_login(db, sd, i, payload);
                             break;
                         case MSG_REGISTER:
-                            handle_register(sd, payload);
+                            handle_register(db, sd, payload);
                             break;
                         case MSG_GET_ONLINE_USERS:
                             handle_get_online_users(sd, fds);
                             break;
-
+                        case MSG_LOGOUT:
+                            sessions[i].is_logged_in = 0;
+                            strcpy(sessions[i].username, "");
+                            sessions[i].socket_fd = -1;
+                            sessions[i].user_id = -1;
+                            break;
 
                         
                     }
-
-
-
 
                 // Read = -1 Lỗi khi đọc 
                 } else {
@@ -334,5 +282,7 @@ int main(){
     for (i = 0; i < MAX_CLIENTS + 1; i++){
         if(fds[i].fd > 0) close(fds[i].fd);
     }
+
+    db_close(db);
     return 0;
 }

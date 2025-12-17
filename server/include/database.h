@@ -6,7 +6,8 @@
 sqlite3 *db_init(const char* db_path);
 void db_close(sqlite3* db);
 
-void add_user(sqlite3* db, const char *name, const char *pass);
+int verify_user(sqlite3 *db, const char* username, const char* password);
+int add_user(sqlite3* db, const char *name, const char *pass);
 void update_user_score(sqlite3 *db, int id, int score);
 void get_user(sqlite3 *db);
 
