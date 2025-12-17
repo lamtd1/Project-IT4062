@@ -1,36 +1,40 @@
-
 import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
 
 const Leaderboard = ({ data, onRefresh }) => (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-        <h3 className="font-bold text-gray-800 mb-3 text-lg flex items-center justify-between">
-            <span className="flex items-center gap-2"><span className="text-yellow-500">🏆</span> Bảng Xếp Hạng</span>
-            <button
-                onClick={onRefresh}
-                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition"
-                title="Làm mới"
-            >
-                🔄 Refresh
-            </button>
-        </h3>
-        <div className="space-y-2">
+    <Card className="shadow-lg border-zinc-200 bg-white overflow-hidden flex flex-col h-full">
+        <CardHeader className="py-4 pb-3 border-b border-zinc-100 bg-zinc-50/50">
+            <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-bold flex items-center gap-2 text-zinc-900">
+                    <span className="text-xl">🏆</span> Bảng Xếp Hạng
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={onRefresh} className="h-7 text-xs px-2 hover:bg-zinc-200 text-zinc-600">
+                    Làm mới
+                </Button>
+            </div>
+        </CardHeader>
+        <CardContent className="space-y-1 p-2 flex-1 overflow-y-auto">
             {data.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center">Chưa có dữ liệu</p>
+                <div className="text-center py-10 text-zinc-400 text-sm italic">Chưa có dữ liệu xếp hạng</div>
             ) : (
                 data.map((user, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                    <div key={idx} className="flex justify-between items-center p-2.5 rounded-md hover:bg-zinc-50 transition-colors cursor-default group">
                         <div className="flex items-center gap-3">
-                            <span className={`font - bold w - 6 text - center ${idx < 3 ? 'text-yellow-600' : 'text-gray-500'} `}>
-                                #{idx + 1}
-                            </span>
-                            <span className="font-medium text-gray-700">{user.name}</span>
+                            <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-yellow-100 text-yellow-700' :
+                                    idx === 1 ? 'bg-zinc-200 text-zinc-600' :
+                                        idx === 2 ? 'bg-amber-100 text-amber-700' : 'text-zinc-400 bg-transparent'
+                                }`}>
+                                {idx + 1}
+                            </div>
+                            <span className="font-semibold text-zinc-700 text-sm group-hover:text-zinc-900">{user.name}</span>
                         </div>
-                        <span className="font-bold text-blue-600">{user.score}</span>
+                        <span className="font-bold text-zinc-900 text-sm bg-zinc-100 px-2 py-0.5 rounded text-xs">{user.score.toLocaleString()}</span>
                     </div>
                 ))
             )}
-        </div>
-    </div>
+        </CardContent>
+    </Card>
 );
 
 export default Leaderboard;

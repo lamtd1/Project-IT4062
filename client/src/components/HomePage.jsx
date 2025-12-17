@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import Leaderboard from './Leaderboard';
 import CreateRoomPanel from './CreateRoomPanel';
 import RoomListPage from './RoomListPage';
+import { Card, CardContent } from "./ui/card";
+import { Button } from "./ui/button";
 
 const HomePage = ({ username, score, onLogout, onCreateRoom, onJoinRoom, rooms, leaderboard, onRequestLeaderboard }) => {
     // Initial load only
@@ -13,27 +15,28 @@ const HomePage = ({ username, score, onLogout, onCreateRoom, onJoinRoom, rooms, 
     }, []);
 
     return (
-        <div className="bg-gray-100 p-8 w-full max-w-6xl h-[80vh] flex flex-col gap-6">
+        <div className="bg-[#f4f4f5] p-8 w-full max-w-7xl h-[85vh] flex flex-col gap-8 shadow-inner rounded-3xl border border-white/50">
             {/* Header */}
-            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+            <Card className="flex justify-between items-center p-5 border-transparent shadow-sm bg-white/80 backdrop-blur-sm">
                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center text-xl font-bold shadow-md">
+                    <div className="w-12 h-12 bg-zinc-900 text-white rounded-full flex items-center justify-center text-xl font-bold shadow-md">
                         {username ? username.charAt(0).toUpperCase() : '?'}
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-gray-900">{username}</h1>
-                        <p className="text-sm font-semibold text-yellow-600 flex items-center gap-1">
-                            <span className="text-yellow-500">⭐️</span> {score} điểm
+                        <h1 className="text-xl font-bold text-zinc-900">{username}</h1>
+                        <p className="text-sm font-semibold text-zinc-500 flex items-center gap-1">
+                            <span className="text-amber-500">⭐️</span> {score} points
                         </p>
                     </div>
                 </div>
-                <button
-                    className="text-red-500 hover:text-red-700 font-medium text-sm transition px-4 py-2 hover:bg-red-50 rounded-lg"
+                <Button
+                    variant="ghost"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
                     onClick={onLogout}
                 >
                     Đăng xuất
-                </button>
-            </div>
+                </Button>
+            </Card>
 
             {/* Content Grid */}
             <div className="flex gap-6 flex-1 overflow-hidden">

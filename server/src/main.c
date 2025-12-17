@@ -66,6 +66,61 @@ void handle_get_leaderboard(sqlite3 *db, int client_fd) {
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
 }
 
+void handle_get_idle_users(int client_fd, struct pollfd* fds) {
+    char buffer[BUFFER_SIZE];
+    memset(buffer, 0, BUFFER_SIZE);
+
+    buffer[0] = MSG_IDLE_USERS_LIST; // 0x43
+    char *list_ptr = buffer + 1; 
+    for (int i = 1; i < MAX_CLIENTS + 1; i++) {
+        // Logged in AND NOT in a room (room_get_by_user returns NULL)
+        // Also exclude self? Maybe invite self for testing? Better exclude self.
+        if (fds[i].fd != -1 && fds[i].fd != client_fd && sessions[i].is_logged_in == 1) {
+            if (room_get_by_user(sessions[i].user_id) == NULL) {
+                strcat(list_ptr, sessions[i].username);
+                strcat(list_ptr, ","); 
+            }
+        }
+    }
+    int len = strlen(list_ptr);
+    if (len > 0 && list_ptr[len - 1] == ',') {
+        list_ptr[len - 1] = '\0';
+    }
+    // printf("Sending idle list to %d: %s\n", client_fd, list_ptr);
+    send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
+}
+
+void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char* target_name, struct pollfd* fds) {
+    // 1. Find Sender's Room
+    Room *r = room_get_by_user(sender_id);
+    if (!r) return; // Sender not in room
+
+    // 2. Find Target Socket
+    int target_fd = -1;
+    for (int i = 1; i < MAX_CLIENTS + 1; i++) {
+        if (sessions[i].is_logged_in && strcmp(sessions[i].username, target_name) == 0) {
+            target_fd = fds[i].fd;
+            break;
+        }
+    }
+
+    if (target_fd != -1) {
+        // 3. Send Invite: [0x48] "SenderName:RoomID:RoomName"
+        char buffer[BUFFER_SIZE];
+        buffer[0] = MSG_INVITE_RECEIVED; // 0x48
+        
+        // Format payload: SenderName:RoomID:RoomName
+        // Note: RoomName might contain special formatted chars from our previous task (Name:Mode), so just send ID is safest, but Name is nice.
+        // Let's send: SenderName:RoomID
+        sprintf(buffer + 1, "%s:%d", sender_name, r->id);
+        
+        send_with_delimiter(target_fd, buffer, 1 + strlen(buffer + 1));
+        printf("User %s invited %s to room %d\n", sender_name, target_name, r->id);
+    } else {
+        printf("Invite failed: User %s not found or offline\n", target_name);
+    }
+}
+
 int main(){
     sqlite3 *db = db_init("../../database/database.db");
     if(!db) {
@@ -247,8 +302,18 @@ int main(){
                             strcpy(resp + 1, board);
                             send_with_delimiter(sd, resp, 1 + strlen(board));
                             // printf("Sent leaderboard to client %d\n", sd);
+                            // printf("Sent leaderboard to client %d\n", sd);
                             break;
                         }
+
+                        case MSG_GET_IDLE_USERS:
+                            handle_get_idle_users(sd, fds);
+                            break;
+
+                        case MSG_INVITE_FRIEND:
+                            // Payload is TargetUsername
+                            handle_invite_friend(sd, sessions[i].user_id, sessions[i].username, payload, fds);
+                            break;
 
                         case MSG_GET_ROOMS: {
                             char room_list[BUFFER_SIZE];

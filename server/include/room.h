@@ -43,7 +43,8 @@ typedef struct {
     int current_question_idx;   // Index câu hiện tại (0-14)
     time_t question_start_time; // Thời điểm bắt đầu câu hỏi hiện tại
     
-
+    char game_log[4096]; // Log diễn biến: "UserID-Answer,"
+    int game_mode; // 1: Elimination (Default), 2: Score Attack
 } Room;
 
 // Khởi tạo hệ thống phòng

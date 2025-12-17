@@ -40,7 +40,13 @@
 #define MSG_GET_ONLINE_USERS 0x40
 #define MSG_ONLINE_USERS_RESULT 0x41
 #define MSG_GET_LEADERBOARD 0x45
+#define MSG_GET_LEADERBOARD 0x45
 #define MSG_LEADERBOARD_LIST 0x46
+#define MSG_INVITE_FRIEND 0x47
+#define MSG_INVITE_RECEIVED 0x48
+
+#define MSG_GET_IDLE_USERS 0x42
+#define MSG_IDLE_USERS_LIST 0x43
 
 // Cấu trúc ngừoi dùng trong gói tin
 typedef struct {

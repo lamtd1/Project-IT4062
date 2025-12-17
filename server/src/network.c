@@ -71,6 +71,26 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             printf("[DB] Updated score for user %d: +%d points\n", r->members[i].user_id, r->members[i].score);
         }
     }
+
+    // SAVE HISTORY
+    // Assuming Single Player for now or last winner standing
+    // In multi-player, winner might be determined earlier.
+    // For now, let's just save.
+    // Winner ID: 0 (or find best score)
+    int winner_id = 0;
+    int max_score = -1;
+    for(int i=0; i<r->player_count; i++) {
+        if(r->members[i].score > max_score) {
+            max_score = r->members[i].score;
+            winner_id = r->members[i].user_id;
+        }
+    }
+    
+    // Save to DB only if Multiplayer (player_count > 1) AND NOT Practice Mode (0)
+    if (r->player_count > 1 && r->game_mode != 0) {
+        // Log "Multiplayer" logic
+        save_history(db, r->name, winner_id, r->game_mode, r->game_log); 
+    }
     
     // Broadcast game end message to all players
     for (int i = 0; i < r->player_count; i++) {

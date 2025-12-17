@@ -38,7 +38,22 @@ int room_create(int user_id, char *username, int socket_fd, char *room_name) {
     for (int i = 0; i < MAX_ROOMS; i++) {
         if (rooms[i].id == -1) {
             rooms[i].id = i;
-            strncpy(rooms[i].name, room_name, sizeof(rooms[i].name));
+            
+            // Payload format: "RoomName:Mode" or just "RoomName"
+            char *p = strchr(room_name, ':');
+            if (p) {
+                *p = '\0';
+                strncpy(rooms[i].name, room_name, sizeof(rooms[i].name));
+                rooms[i].game_mode = atoi(p + 1);
+            } else {
+                strncpy(rooms[i].name, room_name, sizeof(rooms[i].name));
+                rooms[i].game_mode = 1; // Default Elimination
+            }
+            
+            // Mode 0: Practice (Single Player)
+            // Mode 1: Elimination
+            // Mode 2: Score Attack
+            
             rooms[i].status = ROOM_WAITING;
             rooms[i].player_count = 1;
             
@@ -170,6 +185,10 @@ int room_start_game(int room_id, int user_id) {
 
     r->question_start_time = time(NULL);
     printf("[ROOM] Room %d started game by %d\n", room_id, user_id);
+    
+    // Init log
+    r->game_log[0] = '\0';
+    
     return 1;
 }
 
@@ -322,31 +341,55 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
     // Note: calculate_score now returns 1 (correct), -1 (wrong), 0 (timeout)
     int res = calculate_score(q, answer, elapsed);
     
+    // LOGGING: Append "UserID:QuestionID:Answer,"
+    char log_entry[64];
+    sprintf(log_entry, "%d:%d:%s,", user_id, q->id, answer);
+    if (strlen(r->game_log) + strlen(log_entry) < 4095) {
+        strcat(r->game_log, log_entry);
+    }
+    
     // Current Level: 1..15
     int current_level = r->current_question_idx + 1; 
 
     if (res == 1) {
         // CORRECT
-        int prize = get_prize_for_level(current_level);
-        r->members[idx].score = prize;
-        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Tien thuong: %d", current_level, prize);
+        int prize = 0;
+        if (r->game_mode == 2) {
+            // Score Mode: Time based
+            // Base 100 + (30 - elapsed) * 10
+            int time_bonus = (30 - (int)elapsed);
+            if (time_bonus < 0) time_bonus = 0;
+            prize = 100 + time_bonus * 10;
+        } else {
+            // Mode 0 (Practice) & Mode 1 (Elimination): Standard prize
+             prize = get_prize_for_level(current_level);
+        }
         
-        // Logic: Nếu đây là mode Single Player (hoặc Multiplayer trả lời song song), 
-        // ta không cần đợi hết giờ mới qua câu. Nhưng để đồng bộ Multiplayer, ta thường đợi Timer.
-        // Tạm thời Logic hiện tại: User trả lời xong -> Gửi kết quả cho User đó -> Server vẫn đợi Timer hết để chuyển câu (Cho phép người khác trả lời).
-        // Nếu muốn chuyển ngay khi tất cả đã trả lời: Cần check thêm.
+        if (r->game_mode == 2) {
+             r->members[idx].score += prize; // Accumulate in Score Mode
+        } else {
+             r->members[idx].score = prize; // Set for Elimination/Practice
+        }
+        
+        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Diem/Tien: %d", current_level, r->members[idx].score);
         
         return 1;
     } else {
         // WRONG or TIMEOUT
-        int safe_prize = calculate_safe_reward(current_level);
-        r->members[idx].score = safe_prize;
-        r->members[idx].is_eliminated = 1; // Bị loại khỏi vòng chiến đấu tiếp theo
-        
-        if (res == 0) sprintf(result_msg, "HET GIO! Ra ve voi so tien: %d", safe_prize);
-        else sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d", safe_prize);
-        
-        return 2; // Eliminated
+        if (r->game_mode == 2) {
+             // Score Mode
+             // No points, No elimination
+             sprintf(result_msg, "SAI ROI! Ban khong duoc diem cau nay.");
+             return 0; // Not eliminated
+        } else {
+             // Mode 0 & 1: Elimination Logic
+             int safe_money = calculate_safe_reward(current_level);
+             r->members[idx].score = safe_money;
+             r->members[idx].is_eliminated = 1; // ELIMINATED
+             
+             sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d", safe_money);
+             return 2; // Eliminated
+        }
     }
 }
 
