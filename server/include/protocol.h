@@ -14,6 +14,8 @@
 #define MSG_ROOM_JOIN 0x11
 #define MSG_ROOM_UPDATE 0x12
 #define MSG_ROOM_INVITE 0x13
+#define MSG_GET_ROOMS 0x27
+#define MSG_ROOM_LIST 0x28
 
 #define MSG_GAME_START 0x20
 #define MSG_QUESTION 0x21

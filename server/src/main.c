@@ -10,6 +10,8 @@
 
 #include "database.h"
 #include "protocol.h"
+#include "room.h"
+#include "game.h"
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
@@ -125,6 +127,7 @@ int main(){
     }
 
     init_session();
+    room_system_init(db);
 
 
     char buffer[BUFFER_SIZE];
@@ -256,16 +259,68 @@ int main(){
                             handle_get_online_users(sd, fds);
                             break;
                         case MSG_LOGOUT:
+                            // Nếu đang trong phòng thì rời phòng
+                            room_leave(sessions[i].user_id);
+                            
                             sessions[i].is_logged_in = 0;
                             strcpy(sessions[i].username, "");
                             sessions[i].socket_fd = -1;
                             sessions[i].user_id = -1;
                             break;
 
-                        
-                    }
+                        case MSG_GET_ROOMS: {
+                            char room_list[BUFFER_SIZE];
+                            room_get_list_string(room_list);
+                            
+                            char resp[BUFFER_SIZE];
+                            resp[0] = MSG_ROOM_LIST; // 0x28
+                            strcpy(resp + 1, room_list);
+                            send(sd, resp, 1 + strlen(room_list), 0);
+                            printf("Sent room list to client %d\n", sd);
+                            break;
+                        }
 
-                // Read = -1 Lỗi khi đọc 
+                        // --- ROOM HANDLERS ---
+                        case MSG_ROOM_CREATE: {
+                            int r_id = room_create(sessions[i].user_id, sessions[i].username, sd, payload);
+                            char resp[2];
+                            if (r_id >= 0) {
+                                resp[0] = MSG_ROOM_CREATE;
+                                resp[1] = 1; // Success
+                                printf("User %s created room %d\n", sessions[i].username, r_id);
+                            } else {
+                                resp[0] = MSG_ROOM_CREATE;
+                                resp[1] = 0; // Failure
+                                printf("Create room failed for %s. Code: %d\n", sessions[i].username, r_id);
+                            }
+                            send(sd, resp, 2, 0);
+                            break;
+                        }
+
+                        case MSG_ROOM_JOIN: {
+                            int r_id = atoi(payload);
+                            int res = room_join(r_id, sessions[i].user_id, sessions[i].username, sd);
+                            char resp[2];
+                            if (res == 1) {
+                                resp[0] = MSG_ROOM_JOIN;
+                                resp[1] = 1; 
+                                printf("User %s joined room %d\n", sessions[i].username, r_id);
+                            } else {
+                                resp[0] = MSG_ROOM_JOIN;
+                                resp[1] = 0; 
+                                printf("Join room failed. Code: %d\n", res);
+                            }
+                            send(sd, resp, 2, 0);
+                            break;
+                        }
+
+                        case MSG_LEAVE_ROOM: {
+                           room_leave(sessions[i].user_id);
+                           printf("User %s left room request.\n", sessions[i].username);
+                           // Gửi lại confirm? Tuỳ protocol, tạm thời ko cần
+                           break;
+                        }
+                    }
                 } else {
                     if (errno != EINTR) {
                         perror("READ FAIL");
