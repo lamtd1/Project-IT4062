@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import io from 'socket.io-client';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 
@@ -70,12 +70,6 @@ const GameContent = () => {
       if (window.location.pathname === '/home') {
         const p1 = new Uint8Array(1); p1[0] = OPS.GET_ROOMS;
         socket.emit("client_to_server", p1);
-
-        // Stagger leaderboard request to avoid sticky packets
-        setTimeout(() => {
-          const p2 = new Uint8Array(1); p2[0] = OPS.GET_LEADERBOARD;
-          socket.emit("client_to_server", p2);
-        }, 500);
       }
       else if (window.location.pathname === '/room') {
         // Poll room details

@@ -30,17 +30,12 @@ void broadcast_question(int room_id) {
     }
     
     printf("[DEBUG] Room found. current_question_idx = %d\n", r->current_question_idx);
-    int q_id = r->question_ids[r->current_question_idx];
-    printf("[DEBUG] Question ID = %d\n", q_id);
+    printf("[DEBUG] Room found. current_question_idx = %d\n", r->current_question_idx);
     
-    Question *q = get_question_by_id(q_id);
-    if (!q) {
-        printf("[ERROR] Question %d not found!\n", q_id);
-        return;
-    }
+    // Use Question struct directly
+    Question *q = &r->questions[r->current_question_idx];
+    printf("[DEBUG] Question ID = %d, Content: %s\n", q->id, q->content);
     
-    printf("[DEBUG] Question loaded: %s\n", q->content);
-
     // Packet: [MSG_QUESTION] + "ID:Content:A:B:C:D"
     char buf[BUFFER_SIZE];
     buf[0] = MSG_QUESTION; // 0x21
@@ -85,5 +80,69 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             sprintf(msg + 1, "Game Over! Score: %d", r->members[i].score);
             send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
         }
+    }
+}
+
+// Check if user is already online
+int is_user_online(char *username) {
+    for (int i = 0; i < MAX_CLIENTS + 1; i++){
+        if(sessions[i].is_logged_in && strcmp(sessions[i].username, username) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Handle User Registration
+void handle_register(sqlite3 *db, int client_fd, char *payload) {
+    char username[50], password[50];
+    if (sscanf(payload, "%s %s", username, password) < 2) return;
+
+    char response[1];
+    int success = add_user(db, username, password);
+
+    if(success) {
+        response[0] = MSG_REGISTER_SUCCESS;
+        printf("New user registered: %s\n", username);    
+    } else {
+        response[0] = MSG_REGISTER_FAILED;
+        printf("User registration failed for username: %s\n", username);
+    }
+    send_with_delimiter(client_fd, response, 1);
+}
+
+// Handle User Login
+void handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
+    char username[50], password[50];
+    if (sscanf(payload, "%s %s", username, password) < 2) return;
+    char response[64]; 
+
+    if(is_user_online(username)) {
+        response[0] = MSG_ALREADY_LOGIN;
+        send_with_delimiter(client_fd, response, 1);
+        return;
+    }
+
+    int user_id = verify_user(db, username, password);
+    if (user_id > 0) {
+        s->is_logged_in = 1;
+        s->socket_fd = client_fd;
+        s->user_id = user_id;
+        strcpy(s->username, username);
+
+        // Get Score
+        int score = get_user_score(db, user_id);
+        
+        response[0] = MSG_LOGIN_SUCCESS; // 0x03
+        
+        // Gửi: [Op][ID:Score] (String)
+        sprintf(response + 1, "%d:%d", user_id, score); 
+        send_with_delimiter(client_fd, response, 1 + strlen(response+1));
+        
+        printf("User '%s' logged in (ID: %d, Score: %d)\n", username, user_id, score);
+    } else {
+        response[0] = MSG_LOGIN_FAILED;
+        printf("User '%s' login failed\n", username);
+        send_with_delimiter(client_fd, response, 1);
     }
 }

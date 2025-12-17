@@ -16,17 +16,20 @@ typedef struct {
 } Question;
 
 // Khởi tạo game (load câu hỏi)
+// Helper: Load 15 questions for a specific room (SQL RANDOM)
+int load_room_questions(void *db_conn, Question *room_questions);
+
+// Khởi tạo game (load câu hỏi - giữ lại để test hoặc bỏ)
 int game_init(void *db_conn);
 
-// Lấy câu hỏi theo ID
-Question* get_question_by_id(int id);
-
 // Kiểm tra đáp án (Case insensitive)
-// Trả về: Điểm số (nếu đúng), -1 (nếu sai), 0 (nếu hết giờ/lỗi khác)
-int calculate_score(int question_id, char *user_ans, double time_taken);
+int calculate_score(Question *q, char *user_ans, double time_taken);
 
-// Helper: Trộn mảng ID câu hỏi để random cho mỗi phòng
-void shuffle_questions(int *array, int count);
+// --- HELPER FUNCTIONS (Refactored to take Question*) ---
+void get_5050_options(Question *q, char *out_str);
+void get_audience_stats(Question *q, char *out_str);
+void get_phone_friend_response(Question *q, char *out_str);
+void get_expert_advice(Question *q, char *out_str);
 
 // --- CLASSIC MODE LOGIC ---
 // Get prize amount for a given level (1-15)

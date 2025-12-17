@@ -21,7 +21,8 @@
 #define MSG_REGISTER_FAIL MSG_REGISTER_FAILED
 
 // Session is already defined in protocol.h
-static Session sessions[MAX_CLIENTS + 1];  // +1 for slot[0] is server
+// Session is already defined in protocol.h
+Session sessions[MAX_CLIENTS + 1];  // +1 for slot[0] is server
 
 void init_session() {
     for (int i = 0; i < MAX_CLIENTS + 1; i++){
@@ -30,15 +31,6 @@ void init_session() {
         sessions[i].user_id = -1;
         strcpy(sessions[i].username, "");
     }
-}
-
-int is_user_online(char *username) {
-    for (int i = 0; i < MAX_CLIENTS + 1; i++){
-        if(sessions[i].is_logged_in && strcmp(sessions[i].username, username) == 0) {
-            return 1;
-        }
-    }
-    return 0;
 }
 
 void handle_get_online_users(int client_fd, struct pollfd* fds) {
@@ -72,61 +64,6 @@ void handle_get_leaderboard(sqlite3 *db, int client_fd) {
     get_leaderboard(db, list_ptr);
     buffer[0] = MSG_LEADERBOARD_LIST; // 0x46
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
-}
-
-
-// DONE
-void handle_register(sqlite3 *db, int client_fd, char *payload) {
-    char username[50], password[50];
-    if (sscanf(payload, "%s %s", username, password) < 2) return;
-
-    char response[1];
-    int success = add_user(db, username, password);
-
-    if(success) {
-        response[0] = MSG_REGISTER_SUCCESS;
-        printf("New user registered: %s\n", username);    
-    } else {
-        response[0] = MSG_REGISTER_FAIL;
-        printf("User registration failed for username: %s\n", username);
-    }
-    send_with_delimiter(client_fd, response, 1);
-}
-
-// DONE
-void handle_login(sqlite3* db,int client_fd, int session_index, char *payload) {
-    char username[50], password[50];
-    if (sscanf(payload, "%s %s", username, password) < 2) return;
-    char response[64]; // Increased size to accommodate score
-
-    if(is_user_online(username)) {
-        response[0] = MSG_ALREADY_LOGIN;
-        send_with_delimiter(client_fd, response, 1);
-        return;
-    }
-
-    int user_id = verify_user(db, username, password);
-    if (user_id > 0) {
-        sessions[session_index].is_logged_in = 1;
-        sessions[session_index].socket_fd = client_fd;
-        sessions[session_index].user_id = user_id;
-        strcpy(sessions[session_index].username, username);
-
-        // Get Score
-        int score = get_user_score(db, user_id);
-        
-        response[0] = MSG_LOGIN_SUCCESS; // 0x03
-        
-        // Gửi: [Op][ID:Score] (String)
-        sprintf(response + 1, "%d:%d", user_id, score); 
-        send_with_delimiter(client_fd, response, 1 + strlen(response+1));
-        
-        printf("User '%s' logged in (ID: %d, Score: %d) on session slot %d\n", username, user_id, score, session_index);
-    } else {
-        response[0] = MSG_LOGIN_FAILED;
-        printf("User '%s' login failed\n", username);
-        send_with_delimiter(client_fd, response, 1);
-    }
 }
 
 int main(){
@@ -284,7 +221,7 @@ int main(){
                     // MOST IMPORTANT 
                     switch (opcode) {
                         case MSG_LOGIN:
-                            handle_login(db, sd, i, payload);
+                            handle_login(db, sd, &sessions[i], payload);
                             break;
                         case MSG_REGISTER:
                             handle_register(db, sd, payload);

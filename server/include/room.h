@@ -39,7 +39,7 @@ typedef struct {
     RoomMember members[MAX_PLAYERS_PER_ROOM];
     
     // Logic Game bên trong phòng
-    int question_ids[15];       // Bộ 15 câu hỏi random cho ván này
+    Question questions[15];       // Bộ 15 câu hỏi random cho ván này (lưu full struct)
     int current_question_idx;   // Index câu hiện tại (0-14)
     time_t question_start_time; // Thời điểm bắt đầu câu hỏi hiện tại
     

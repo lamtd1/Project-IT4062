@@ -4,19 +4,13 @@ import CreateRoomPanel from './CreateRoomPanel';
 import RoomListPage from './RoomListPage';
 
 const HomePage = ({ username, score, onLogout, onCreateRoom, onJoinRoom, rooms, leaderboard, onRequestLeaderboard }) => {
-    // Auto-refresh leaderboard when entering HomePage
+    // Initial load only
     useEffect(() => {
         if (onRequestLeaderboard) {
             onRequestLeaderboard();
-
-            // Refresh every 5 seconds to show updated scores
-            const interval = setInterval(() => {
-                onRequestLeaderboard();
-            }, 5000);
-
-            return () => clearInterval(interval);
         }
-    }, [onRequestLeaderboard]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className="bg-gray-100 p-8 w-full max-w-6xl h-[80vh] flex flex-col gap-6">
@@ -47,7 +41,7 @@ const HomePage = ({ username, score, onLogout, onCreateRoom, onJoinRoom, rooms, 
                 <div className="w-1/3 flex flex-col gap-6">
                     <CreateRoomPanel onCreate={onCreateRoom} />
                     <div className="flex-1 overflow-hidden flex flex-col">
-                        <Leaderboard data={leaderboard} />
+                        <Leaderboard data={leaderboard} onRefresh={onRequestLeaderboard} />
                     </div>
                 </div>
 
