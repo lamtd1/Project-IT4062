@@ -33,6 +33,8 @@
 #define MSG_LOGOUT 0x30
 #define MSG_LEAVE_ROOM 0x31
 #define MSG_WALK_AWAY 0x2B
+#define MSG_USE_HELP 0x2C
+#define MSG_HELP_RESULT 0x2D
 
 
 #define MSG_GET_ONLINE_USERS 0x40

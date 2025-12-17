@@ -170,6 +170,16 @@ const GameContent = () => {
         setGameStatus('FINISHED');
         setGameResult(payload);
       }
+      else if (opcode === 0x2B) { // MSG_WALK_AWAY
+        const msg = textDecoder.decode(view.slice(1));
+        alert(msg);
+        // navigate('/home'); // Room close signals will handle nav?
+      } else if (opcode === 0x2C) {
+        // MSG_USE_HELP response? (Usually we use 0x2D for result)
+      } else if (opcode === 0x2D) { // MSG_HELP_RESULT
+        const msg = textDecoder.decode(view.slice(1));
+        alert(`Tư vấn trợ giúp:\n${msg}`);
+      }
       else if (opcode === OPS.ROOM_LIST) {
         const listStr = textDecoder.decode(view.slice(1));
         if (!listStr) setRooms([]);
@@ -208,6 +218,16 @@ const GameContent = () => {
 
     return () => { socket.off('server_to_client'); clearInterval(interval); };
   }, [navigate, roomInfo.id]);
+
+  // Timer Countdown Effect
+  useEffect(() => {
+    if (gameStatus === 'PLAYING' && timeLeft > 0) {
+      const timer = setInterval(() => {
+        setTimeLeft(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [gameStatus, timeLeft]);
 
   const handleSubmit = (opcode) => {
     if (!username || !password) return setStatus({ msg: "Nhập đủ thông tin", type: 'error' });

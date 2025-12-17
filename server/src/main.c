@@ -380,6 +380,24 @@ int main(){
                             break;
                         }
                         
+                        case MSG_USE_HELP: {
+                            // Payload: "type" (1 byte ascii '1'..'4')
+                            int type = atoi(payload);
+                            Room* r = room_get_by_user(sessions[i].user_id);
+                            char resp[BUFFER_SIZE];
+                            resp[0] = MSG_HELP_RESULT; // 0x2D
+                            
+                            if (r) {
+                                char result_msg[256];
+                                room_use_lifeline(r->id, sessions[i].user_id, type, result_msg);
+                                strcpy(resp + 1, result_msg);
+                            } else {
+                                strcpy(resp + 1, "Ban khong o trong phong nao!");
+                            }
+                            send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
+                            break;
+                        }
+                        
                         case MSG_WALK_AWAY: {
                             char result_msg[256];
                             int res = room_walk_away(sessions[i].user_id, result_msg);

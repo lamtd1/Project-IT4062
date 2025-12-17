@@ -62,8 +62,10 @@ const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
                         <button
                             className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-105"
                             onClick={() => {
-                                // TODO: Send lifeline request
-                                console.log("50-50 requested");
+                                const buf = new Uint8Array(2);
+                                buf[0] = 0x2C; // MSG_USE_HELP
+                                buf[1] = 0x31; // '1'
+                                socket.emit('client_to_server', buf);
                             }}
                         >
                             <div className="flex items-center gap-2">
@@ -76,7 +78,10 @@ const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
                         <button
                             className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-105"
                             onClick={() => {
-                                console.log("Audience poll requested");
+                                const buf = new Uint8Array(2);
+                                buf[0] = 0x2C; // MSG_USE_HELP
+                                buf[1] = 0x32; // '2'
+                                socket.emit('client_to_server', buf);
                             }}
                         >
                             <div className="flex items-center gap-2">
@@ -89,7 +94,10 @@ const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
                         <button
                             className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-105"
                             onClick={() => {
-                                console.log("Phone a friend requested");
+                                const buf = new Uint8Array(2);
+                                buf[0] = 0x2C; // MSG_USE_HELP
+                                buf[1] = 0x33; // '3'
+                                socket.emit('client_to_server', buf);
                             }}
                         >
                             <div className="flex items-center gap-2">
@@ -102,7 +110,10 @@ const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
                         <button
                             className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all transform hover:scale-105"
                             onClick={() => {
-                                console.log("Expert advice requested");
+                                const buf = new Uint8Array(2);
+                                buf[0] = 0x2C; // MSG_USE_HELP
+                                buf[1] = 0x34; // '4'
+                                socket.emit('client_to_server', buf);
                             }}
                         >
                             <div className="flex items-center gap-2">

@@ -47,7 +47,7 @@ io.on('connection', (webSocket) => {
                 const opcode = message[0];
                 const payload = message.slice(1);
                 console.log("------ MESSAGE PARSED ------");
-                console.log("Opcode:", opcode.toString(16));
+                console.log("Opcode:", "0x" + opcode.toString(16).toUpperCase());
                 console.log("Payload:", payload.toString());
                 console.log("----------------------------");
 
