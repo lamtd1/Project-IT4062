@@ -7,6 +7,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <time.h>
+#include <stdarg.h>
 #include "database.h"
 #include "room.h"
 #include "game.h"
@@ -30,6 +31,23 @@ void init_session() {
         sessions[i].user_id = -1;
         strcpy(sessions[i].username, "");
     }
+}
+
+// Hàm ghi lịch sử vào file
+void log_history(const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    FILE *fp = fopen("../../logs/server_history.txt", "a");
+    if (fp) {
+        time_t now = time(NULL);
+        char *time_str = ctime(&now);
+        time_str[strlen(time_str)-1] = '\0'; // remove newline
+        fprintf(fp, "[%s] ", time_str);
+        vfprintf(fp, format, args);
+        fprintf(fp, "\n");
+        fclose(fp);
+    }
+    va_end(args);
 }
 
 
@@ -275,12 +293,26 @@ int main(){
 
                     // MOST IMPORTANT 
                     switch (opcode) {
-                        case MSG_LOGIN:
-                            handle_login(db, sd, &sessions[i], payload);
+                        case MSG_LOGIN: {
+                            char username[50];
+                            sscanf(payload, "%s", username);
+                            if (handle_login(db, sd, &sessions[i], payload)) {
+                                log_history("User '%s' logged in", username);
+                            } else {
+                                log_history("User '%s' login failed", username);
+                            }
                             break;
-                        case MSG_REGISTER:
-                            handle_register(db, sd, payload);
+                        }
+                        case MSG_REGISTER: {
+                            char username[50];
+                            sscanf(payload, "%s", username);
+                            if (handle_register(db, sd, payload)) {
+                                log_history("User '%s' registered", username);
+                            } else {
+                                log_history("User '%s' registration failed", username);
+                            }
                             break;
+                        }
                         case MSG_GET_ONLINE_USERS:
                             handle_get_online_users(sd, fds);
                             break;
@@ -288,6 +320,7 @@ int main(){
                             // Nếu đang trong phòng thì rời phòng
                             room_leave(sessions[i].user_id);
                             
+                            log_history("User '%s' logged out", sessions[i].username);
                             sessions[i].is_logged_in = 0;
                             strcpy(sessions[i].username, "");
                             sessions[i].socket_fd = -1;
@@ -349,11 +382,13 @@ int main(){
                                 resp[1] = 1; // Success
                                 resp[2] = r_id; // Room ID
                                 printf("User %s created room %d\n", sessions[i].username, r_id);
+                                log_history("User '%s' created room %d", sessions[i].username, r_id);
                             } else {
                                 resp[0] = MSG_ROOM_CREATE;
                                 resp[1] = 0; // Failure
                                 resp[2] = 0;
                                 printf("Create room failed for %s. Code: %d\n", sessions[i].username, r_id);
+                                log_history("User '%s' create room failed", sessions[i].username);
                             }
                             send_with_delimiter(sd, resp, 3);
                             break;
@@ -367,10 +402,12 @@ int main(){
                                 resp[0] = MSG_ROOM_JOIN;
                                 resp[1] = 1; 
                                 printf("User %s joined room %d\n", sessions[i].username, r_id);
+                                log_history("User '%s' joined room %d", sessions[i].username, r_id);
                             } else {
                                 resp[0] = MSG_ROOM_JOIN;
                                 resp[1] = 0; 
                                 printf("Join room failed. Code: %d\n", res);
+                                log_history("User '%s' join room %d failed", sessions[i].username, r_id);
                             }
                             send_with_delimiter(sd, resp, 2);
                             break;
@@ -379,6 +416,7 @@ int main(){
                         case MSG_LEAVE_ROOM: {
                            room_leave(sessions[i].user_id);
                            printf("User %s left room request.\n", sessions[i].username);
+                           log_history("User '%s' left room", sessions[i].username);
                            // Gửi lại confirm? Tuỳ protocol, tạm thời ko cần
                            break;
                         }
@@ -391,9 +429,11 @@ int main(){
                                 if (res == 1) {
                                     // Start Success -> Broadcast First Question Immediate
                                     printf("User %s started game in room %d\n", sessions[i].username, r->id);
+                                    log_history("User '%s' started game in room %d", sessions[i].username, r->id);
                                     broadcast_question(r->id);
                                 } else {
                                     printf("Start game failed. Error: %d\n", res);
+                                    log_history("User '%s' start game in room %d failed", sessions[i].username, r->id);
                                 }
                             }
                             break;

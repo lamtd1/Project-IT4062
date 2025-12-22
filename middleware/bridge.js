@@ -2,6 +2,21 @@ import express from 'express'
 import net from 'net'
 import { createServer } from 'node:http'
 import { Server } from 'socket.io'
+import fs from 'fs'
+import path from 'path'
+
+// Hàm ghi lịch sử middleware
+function log_middleware(message) {
+    const now = new Date();
+    const time_str = now.toISOString();
+    const log_entry = `[${time_str}] ${message}\n`;
+    const log_path = path.join(process.cwd(), '..', 'logs', 'middleware_history.txt');
+    fs.appendFile(log_path, log_entry, (err) => {
+        if (err) {
+            console.error('Failed to write to log file:', err);
+        }
+    });
+}
 
 const app = express()
 const server = createServer(app);
@@ -16,12 +31,12 @@ const C_SERVER_PORT = 8080
 const C_SERVER_HOST = '127.0.0.1'
 
 io.on('connection', (webSocket) => {
-    console.log(`React client connected: ${webSocket.id}`)
+    log_middleware(`React client connected: ${webSocket.id}`)
 
     const tcpSocket = new net.Socket();
     tcpSocket.connect(
         C_SERVER_PORT, C_SERVER_HOST, () => {
-            console.log(`C server connected port: `, C_SERVER_PORT);
+            log_middleware(`C server connected port: ${C_SERVER_PORT}`)
         }
     )
     // Handle chuyển dữ liệu client -> server
@@ -46,10 +61,10 @@ io.on('connection', (webSocket) => {
             if (message.length > 0) {
                 const opcode = message[0];
                 const payload = message.slice(1);
-                console.log("------ MESSAGE PARSED ------");
-                console.log("Opcode:", "0x" + opcode.toString(16).toUpperCase());
-                console.log("Payload:", payload.toString());
-                console.log("----------------------------");
+                log_middleware("------ MESSAGE PARSED ------");
+                log_middleware("Opcode: 0x" + opcode.toString(16).toUpperCase());
+                log_middleware("Payload: " + payload.toString());
+                log_middleware("----------------------------");
 
                 // Emit to WebSocket
                 webSocket.emit('server_to_client', message);
@@ -59,14 +74,14 @@ io.on('connection', (webSocket) => {
 
     // Handle nếu phía server close
     tcpSocket.on('close', () => {
-        console.log(`C Server closed connection for ${tcpSocket.id}`)
+        log_middleware(`C Server closed connection for ${tcpSocket.id}`)
         webSocket.disconnect()
     })
 
     // Handle nếu phía client close
     webSocket.on('disconnect', () => {
         tcpSocket.end()
-        console.log(`React Client disconnected: ${webSocket.id}`)
+        log_middleware(`React Client disconnected: ${webSocket.id}`)
     })
 
     // Handle nếu có lỗi
@@ -78,7 +93,7 @@ io.on('connection', (webSocket) => {
 
 const PORT = 4000
 server.listen(PORT, () => {
-    console.log(`MIDDLEWARE RUNNING ON PORT: `, PORT)
+    log_middleware(`MIDDLEWARE RUNNING ON PORT: ${PORT}`)
 })
 
 

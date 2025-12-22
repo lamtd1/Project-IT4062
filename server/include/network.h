@@ -16,8 +16,8 @@ void broadcast_question(int room_id);
 void broadcast_end_game(int room_id, sqlite3 *db);
 
 // Authentication Handlers
-void handle_register(sqlite3 *db, int client_fd, char *payload);
-void handle_login(sqlite3 *db, int client_fd, Session *s, char *payload);
+int handle_register(sqlite3 *db, int client_fd, char *payload);
+int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload);
 int is_user_online(char *username);
 
 // Global sessions array (defined in main.c)
