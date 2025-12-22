@@ -20,10 +20,9 @@
 // Define alias for consistency
 #define MSG_REGISTER_FAIL MSG_REGISTER_FAILED
 
-// Session is already defined in protocol.h
-// Session is already defined in protocol.h
 Session sessions[MAX_CLIENTS + 1];  // +1 for slot[0] is server
 
+// Hàm khởi tạo session
 void init_session() {
     for (int i = 0; i < MAX_CLIENTS + 1; i++){
         sessions[i].socket_fd = -1;
@@ -32,6 +31,7 @@ void init_session() {
         strcpy(sessions[i].username, "");
     }
 }
+
 
 void handle_get_online_users(int client_fd, struct pollfd* fds) {
     char buffer[BUFFER_SIZE];
@@ -59,10 +59,10 @@ void handle_get_online_users(int client_fd, struct pollfd* fds) {
 void handle_get_leaderboard(sqlite3 *db, int client_fd) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
-    char *list_ptr = buffer + 1; // Pointer to start of payload
+    char *list_ptr = buffer + 1;
 
     get_leaderboard(db, list_ptr);
-    buffer[0] = MSG_LEADERBOARD_LIST; // 0x46
+    buffer[0] = MSG_LEADERBOARD_LIST;
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
 }
 
@@ -74,7 +74,7 @@ void handle_get_idle_users(int client_fd, struct pollfd* fds) {
     char *list_ptr = buffer + 1; 
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
         // Logged in AND NOT in a room (room_get_by_user returns NULL)
-        // Also exclude self? Maybe invite self for testing? Better exclude self.
+        // Also exclude self
         if (fds[i].fd != -1 && fds[i].fd != client_fd && sessions[i].is_logged_in == 1) {
             if (room_get_by_user(sessions[i].user_id) == NULL) {
                 strcat(list_ptr, sessions[i].username);
