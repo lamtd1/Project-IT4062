@@ -56,8 +56,12 @@ void room_system_init(void *db_conn) {
  * 4. Khởi tạo phòng với user làm host (member[0])
  */
 int room_create(int user_id, char *username, int socket_fd, char *room_name) {
-    // KIỂM TRA: User không được ở 2 phòng cùng lúc
-    if (room_get_by_user(user_id) != NULL) return -1; 
+    // KIỂM TRA: Nếu user đã ở phòng khác, tự động leave trước
+    Room *existing = room_get_by_user(user_id);
+    if (existing != NULL) {
+        printf("[ROOM] User %d already in room, auto-leaving...\n", user_id);
+        room_leave(user_id); // Tự động rời phòng cũ
+    } 
 
     // Tìm slot trống để tạo phòng mới
     for (int i = 0; i < MAX_ROOMS; i++) {
@@ -77,9 +81,9 @@ int room_create(int user_id, char *username, int socket_fd, char *room_name) {
             }
             
             // GAME MODES:
-            // 0: Practice (Chơi đơn, không tính điểm)
-            // 1: Elimination (Sai = loại, giữ mốc an toàn)
-            // 2: Score Attack (Tích lũy điểm, không loại)
+            // 0: Cổ Điển (Chơi đơn, mốc an toàn 5 & 10, có Walk Away)
+            // 1: Loại Trừ (Multi-player, ai đúng next câu, cộng điểm)
+            // 2: Tính Điểm (Multi-player, tất cả trả lời, điểm cao thắng)
             
             rooms[i].status = ROOM_WAITING; // Trạng thái chờ người chơi
             rooms[i].player_count = 1; // Có 1 người (host)
@@ -128,6 +132,11 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
     if (r->id == -1) return -1; // Phòng chưa được tạo
     if (r->player_count >= MAX_PLAYERS_PER_ROOM) return -2; // Phòng đầy
     if (r->status != ROOM_WAITING) return -3; // Phòng đang chơi hoặc đã kết thúc
+    
+    // MODE 0 (Cổ Điển): Chỉ cho phép 1 người chơi
+    if (r->game_mode == MODE_CLASSIC && r->player_count >= 1) {
+        return -5; // Reject: Phòng chơi đơn
+    }
     
     // Kiểm tra user đã ở trong phòng chưa (tránh duplicate)
     for(int i=0; i<r->player_count; i++) {
@@ -440,6 +449,9 @@ void room_get_list_string(char *buffer) {
     // Duyệt qua tất cả các phòng
     for (int i = 0; i < MAX_ROOMS; i++) {
         if (rooms[i].id != -1) { // Phòng đang hoạt động
+            // BỎ QUA phòng Mode 0 (Cổ Điển) - chỉ chơi đơn, không hiển thị
+            if (rooms[i].game_mode == MODE_CLASSIC) continue;
+            
             char temp[128];
             sprintf(temp, "%d:%s:%d:%d,", 
                 rooms[i].id, 

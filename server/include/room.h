@@ -7,6 +7,11 @@
 #define MAX_ROOMS 20
 #define MAX_PLAYERS_PER_ROOM 4
 
+// Game Mode Constants
+#define MODE_CLASSIC 0      // Cổ Điển (đơn, mốc an toàn)
+#define MODE_ELIMINATION 1  // Loại Trừ (multi, ai đúng next)
+#define MODE_SCORE_ATTACK 2 // Tính Điểm (multi, tất cả trả lời)
+
 // Trạng thái phòng
 typedef enum {
     ROOM_WAITING = 0,

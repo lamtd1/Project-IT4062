@@ -298,11 +298,21 @@ export const useGameLogic = () => {
         }
     };
 
+    const handleReplay = () => {
+        console.log('[REPLAY] Button clicked!');
+        setGameStatus('LOBBY');
+        setCurrentQuestion(null);
+        setTimeLeft(0);
+        setGameResult('');
+        setRenderKey(prev => prev + 1);
+        console.log('[REPLAY] State reset to LOBBY');
+    };
+
     return {
         state: {
             username, setUsername, password, setPassword,
             userId, score, status,
-            gameStatus, currentQuestion, timeLeft, gameResult, renderKey,
+            gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
             roomInfo, roomMembers, isHost,
             rooms, leaderboard,
             idleUsers, incomingInvite,
@@ -320,6 +330,7 @@ export const useGameLogic = () => {
             handleGetIdleUsers,
             handleSendInvite,
             handleAcceptInvite,
+            handleReplay,
         },
         socket
     };
