@@ -2,4 +2,8 @@
 /client/public
 /middleware/node_modules
 /middleware/.env
+*.db
+*.sqlite
+*.log
+logs/
 database/database.db
