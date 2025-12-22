@@ -2,3 +2,4 @@
 /client/public
 /middleware/node_modules
 /middleware/.env
+database/database.db
