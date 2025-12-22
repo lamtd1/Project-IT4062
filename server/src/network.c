@@ -114,9 +114,9 @@ int is_user_online(char *username) {
 }
 
 // Handle User Registration
-void handle_register(sqlite3 *db, int client_fd, char *payload) {
+int handle_register(sqlite3 *db, int client_fd, char *payload) {
     char username[50], password[50];
-    if (sscanf(payload, "%s %s", username, password) < 2) return;
+    if (sscanf(payload, "%s %s", username, password) < 2) return 0;
 
     char response[1];
     int success = add_user(db, username, password);
@@ -129,18 +129,19 @@ void handle_register(sqlite3 *db, int client_fd, char *payload) {
         printf("User registration failed for username: %s\n", username);
     }
     send_with_delimiter(client_fd, response, 1);
+    return success;
 }
 
 // Handle User Login
-void handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
+int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
     char username[50], password[50];
-    if (sscanf(payload, "%s %s", username, password) < 2) return;
+    if (sscanf(payload, "%s %s", username, password) < 2) return 0;
     char response[64]; 
 
     if(is_user_online(username)) {
         response[0] = MSG_ALREADY_LOGIN;
         send_with_delimiter(client_fd, response, 1);
-        return;
+        return 0;
     }
 
     int user_id = verify_user(db, username, password);
@@ -160,9 +161,11 @@ void handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
         send_with_delimiter(client_fd, response, 1 + strlen(response+1));
         
         printf("User '%s' logged in (ID: %d, Score: %d)\n", username, user_id, score);
+        return 1;
     } else {
         response[0] = MSG_LOGIN_FAILED;
         printf("User '%s' login failed\n", username);
         send_with_delimiter(client_fd, response, 1);
+        return 0;
     }
 }
