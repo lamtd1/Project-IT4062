@@ -1,5 +1,0 @@
-[Mon Dec 22 16:32:15 2025] User 'lam' logged out
-[Mon Dec 22 16:32:24 2025] User 'lam' logged in
-[Mon Dec 22 16:32:28 2025] User 'lam' created room 0
-[Mon Dec 22 16:32:41 2025] User 'lam' started game in room 0
-[Mon Dec 22 16:32:44 2025] User 'lam' left room
