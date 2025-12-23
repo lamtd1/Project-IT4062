@@ -5,6 +5,10 @@ import { Badge } from "./ui/badge";
 
 const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [], onGetIdleUsers, onSendInvite }) => {
     const [showInvite, setShowInvite] = useState(false);
+    
+    // Detect Mode 0 (Classic): check if room name contains ":0"
+    const isMode0 = roomInfo.name && roomInfo.name.includes(':0');
+    const maxPlayers = isMode0 ? 1 : 4;
 
     const handleOpenInvite = () => {
         if (onGetIdleUsers) onGetIdleUsers();
@@ -107,10 +111,10 @@ const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [],
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
                             Người chơi
-                            <Badge variant="secondary" className="bg-white border-zinc-200">{members.length}/4</Badge>
+                            <Badge variant="secondary" className="bg-white border-zinc-200">{members.length}/{maxPlayers}</Badge>
                         </h3>
-                        {/* Only Host can invite? Or everyone? Protocol allows everyone but UI usually Host only. Let's allow Host only for control. */}
-                        {isHost && (
+                        {/* Hide invite button for Mode 0 (single-player) */}
+                        {isHost && !isMode0 && (
                             <Button size="sm" variant="ghost" onClick={handleOpenInvite} className="h-8 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
                                 + Mời
                             </Button>
@@ -133,8 +137,8 @@ const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [],
                                 </div>
                             </Card>
                         ))}
-                        {/* Empty slots placeholders */}
-                        {Array.from({ length: Math.max(0, 4 - members.length) }).map((_, i) => (
+                        {/* Empty slots placeholders - only show for non-Mode0 */}
+                        {!isMode0 && Array.from({ length: Math.max(0, maxPlayers - members.length) }).map((_, i) => (
                             <div key={`empty-${i}`} className="p-3 border-2 border-dashed border-zinc-200 rounded-lg flex items-center gap-3 opacity-50">
                                 <div className="w-10 h-10 rounded-full bg-zinc-100"></div>
                                 <div className="h-4 bg-zinc-100 w-20 rounded"></div>

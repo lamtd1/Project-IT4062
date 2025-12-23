@@ -23,7 +23,7 @@ const GameContent = () => {
   const {
     username, setUsername, password, setPassword,
     score, status,
-    gameStatus, currentQuestion, timeLeft, gameResult, renderKey,
+    gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
     roomInfo, roomMembers, isHost,
     rooms, leaderboard,
     idleUsers, incomingInvite, setIncomingInvite
@@ -40,7 +40,8 @@ const GameContent = () => {
     handleAnswer,
     handleGetIdleUsers,
     handleSendInvite,
-    handleAcceptInvite
+    handleAcceptInvite,
+    handleReplay
   } = actions;
 
   const commonProps = { username, setUsername, password, setPassword, onSubmit: handleSubmit, status };
@@ -95,10 +96,35 @@ const GameContent = () => {
               onSendInvite={handleSendInvite}
             />
           ) : gameStatus === 'FINISHED' ? (
-            <div className="bg-white p-8 rounded-xl shadow-xl text-center">
-              <h2 className="text-3xl font-bold text-gray-800 mb-4">Kết Thúc!</h2>
-              <p className="text-xl text-blue-600 mb-6">{gameResult}</p>
-              <button onClick={handleLeaveRoom} className="bg-gray-500 text-white px-6 py-2 rounded-lg">Thoát về Sảnh</button>
+            <div className="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-lg border-2 border-zinc-100">
+              <div className="mb-6">
+                <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                  <span className="text-4xl">🏆</span>
+                </div>
+                <h2 className="text-4xl font-bold text-zinc-900 mb-2">Game Kết Thúc!</h2>
+                <p className="text-lg text-zinc-600 mb-4">{gameResult}</p>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                <button 
+                  onClick={handleReplay}
+                  className="group relative px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    🔄 Chơi lại
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                </button>
+                
+                <button 
+                  onClick={handleLeaveRoom} 
+                  className="px-8 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl font-bold shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 border-2 border-zinc-200"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    🏠 Về Sảnh
+                  </span>
+                </button>
+              </div>
             </div>
           ) : (
             <GameUI

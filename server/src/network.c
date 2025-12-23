@@ -64,11 +64,14 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
     Room *r = room_get_by_id(room_id);
     if (!r) return;
     
-    // Save scores to database for all players
-    for (int i = 0; i < r->player_count; i++) {
-        if (r->members[i].user_id > 0 && r->members[i].score > 0) {
-            update_user_score(db, r->members[i].user_id, r->members[i].score);
-            printf("[DB] Updated score for user %d: +%d points\n", r->members[i].user_id, r->members[i].score);
+    // MODE 0 (Classic): KHÔNG cập nhật điểm tích lũy vào DB
+    if (r->game_mode != MODE_CLASSIC) {
+        // Save scores to database for all players (Mode 1 & 2 only)
+        for (int i = 0; i < r->player_count; i++) {
+            if (r->members[i].user_id > 0 && r->members[i].score > 0) {
+                update_user_score(db, r->members[i].user_id, r->members[i].score);
+                printf("[DB] Updated score for user %d: +%d points\n", r->members[i].user_id, r->members[i].score);
+            }
         }
     }
 
@@ -84,6 +87,31 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             max_score = r->members[i].score;
             winner_id = r->members[i].user_id;
         }
+    }
+    
+    
+    // TẤT CẢ MODES: Reset về WAITING để cho phép chơi lại
+    r->status = ROOM_WAITING;
+    r->current_question_idx = 0;
+    
+    // Reset states
+    for (int i = 0; i < r->player_count; i++) {
+        r->members[i].score = 0;
+        r->members[i].is_eliminated = 0;
+    }
+    
+    // MODE 0 (Classic): Reset về WAITING thay vì FINISHED
+    if (r->game_mode == MODE_CLASSIC) {
+        // Gửi thông báo kết thúc
+        for (int i = 0; i < r->player_count; i++) {
+            if (r->members[i].socket_fd > 0) {
+                char msg[128];
+                msg[0] = MSG_GAME_END;
+                sprintf(msg + 1, "Game ket thuc! Diem: %d", max_score);
+                send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
+            }
+        }
+        return; // Không lưu history
     }
     
     // Save to DB only if Multiplayer (player_count > 1) AND NOT Practice Mode (0)
