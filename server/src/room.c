@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../include/room.h"
+#include "../include/network.h"  // For broadcast_scores()
 
 // --- KHAI BÁO THƯ VIỆN ĐỂ SEND ---
 #include <sys/socket.h>
@@ -256,7 +257,15 @@ int room_start_game(int room_id, int user_id) {
     
     // KIỂM TRA QUYỀN: Chỉ host (member[0]) mới được start
     if (r->members[0].user_id != user_id) return -1;
-    if (r->player_count < 1) return -2; // Phải có ít nhất 1 người
+    
+    // KIỂM TRA SỐ NGƯỜI CHƠI theo mode
+    if (r->game_mode == MODE_CLASSIC) {
+        // Mode 0: Allow 1 player
+        if (r->player_count < 1) return -2;
+    } else {
+        // Mode 1 & 2: Require >= 2 players
+        if (r->player_count < 2) return -4;
+    }
 
     // CHUYỂN TRẠNG THÁI
     r->status = ROOM_PLAYING;
@@ -266,6 +275,7 @@ int room_start_game(int room_id, int user_id) {
     for(int i=0; i<r->player_count; i++) {
         r->members[i].score = 0;
         r->members[i].is_eliminated = 0; // Chưa bị loại
+        r->members[i].has_answered = 0;  // Chưa trả lời (Mode 2)
     }
 
     // LOAD 15 CÂU HỎI NGẪU NHIÊN từ database
@@ -333,7 +343,35 @@ int room_update_timer(int room_id) {
     // Tính thời gian đã trôi qua (giây)
     double elapsed = difftime(time(NULL), r->question_start_time);
     
-    // KIỂM TRA HẾT GIỜ
+    // MODE 2: Timeout handling (30s)
+    if (r->game_mode == MODE_SCORE_ATTACK && elapsed > 30) {
+        // Auto-mark unanswered players as wrong
+        int any_auto_answered = 0;
+        for (int i = 0; i < r->player_count; i++) {
+            if (!r->members[i].is_eliminated && !r->members[i].has_answered) {
+                r->members[i].has_answered = 1;
+                any_auto_answered = 1;
+                printf("[TIMEOUT] Player %s auto-marked wrong\n", r->members[i].username);
+            }
+        }
+        
+        // If we auto-answered anyone, check if all now answered
+        if (any_auto_answered && all_players_answered(r->id)) {
+            // Advance to next question
+            r->current_question_idx++;
+            reset_answer_flags(r->id);
+            
+            if (r->current_question_idx >= 15) {
+                r->status = ROOM_FINISHED;
+                return 2; // Game Over
+            }
+            
+            r->question_start_time = time(NULL);
+            return 1; // Advance question
+        }
+    }
+    
+    // MODE 0 & 1: Standard timeout (30s) - obsolete with new logic but keep for safety
     if (elapsed > QUESTION_DURATION) {
         // Chuyển sang câu hỏi tiếp theo
         r->current_question_idx++;
@@ -503,124 +541,278 @@ void room_get_detail_string(int room_id, char *buffer) {
 }
 
 /**
- * Xử lý câu trả lời của người chơi
- * @param user_id: ID người trả lời
- * @param answer: Câu trả lời (A/B/C/D)
- * @param result_msg: Buffer để lưu kết quả
- * @return: 0 (sai/timeout), 1 (đúng), 2 (bị loại)
- * 
- * LOGIC THEO GAME MODE:
- * 
- * Mode 0 & 1 (Practice/Elimination):
- * - Đúng: Nhận tiền thưởng theo level, tiếp tục chơi
- * - Sai: Ra về với mốc an toàn, bị loại (is_eliminated=1)
- * 
- * Mode 2 (Score Attack):
- * - Đúng: Tích lũy điểm (base 100 + time bonus), tiếp tục
- * - Sai: Không điểm, KHÔNG bị loại, tiếp tục chơi
- * 
- * LOGGING: Ghi lại lịch sử trả lời "UserID:QuestionID:Answer,"
+ * ===================================
+ * MODE-SPECIFIC ANSWER HANDLERS
+ * ===================================
  */
-int room_handle_answer(int user_id, char *answer, char *result_msg) {
-    // VALIDATE: Tìm phòng của user
+
+/**
+ * MODE 0: LUYỆN TẬP (Practice Mode)
+ * - Single player
+ * - Fixed prize (overwrite score)
+ * - Safe-haven on wrong answer
+ * 
+ * @return: 1 (correct), 2 (eliminated)
+ */
+int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
         strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
-        return 0;
+        return -1;
     }
-
-    // Tìm index của user trong members
+    
+    // Tìm index của user
     int idx = -1;
     for (int i = 0; i < r->player_count; i++) {
-        if (r->members[i].user_id == user_id) { 
-            idx = i; 
-            break; 
+        if (r->members[i].user_id == user_id) {
+            idx = i;
+            break;
         }
     }
     
-    // VALIDATE: User phải còn trong game
     if (idx == -1 || r->members[idx].is_eliminated) {
         strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
-        return 0; 
+        return 0;
     }
-
+    
     // Lấy câu hỏi hiện tại
     Question *q = &r->questions[r->current_question_idx];
-    
-    // Tính thời gian đã trôi qua
     double elapsed = difftime(time(NULL), r->question_start_time);
     
-    // KIỂM TRA ĐÁP ÁN qua module game.c
-    // calculate_score() return: 1 (đúng), -1 (sai), 0 (timeout)
+    // KIỂM TRA ĐÁP ÁN
     int res = calculate_score(q, answer, elapsed);
     
-    // LOGGING: Ghi lại câu trả lời
-    // Format: "UserID:QuestionID:Answer,"
+    // LOGGING
     char log_entry[64];
     sprintf(log_entry, "%d:%d:%s,", user_id, q->id, answer);
     if (strlen(r->game_log) + strlen(log_entry) < 4095) {
         strcat(r->game_log, log_entry);
     }
     
-    // Level hiện tại (1..15)
-    int current_level = r->current_question_idx + 1; 
-
-    // === XỬ LÝ KẾT QUẢ ===
+    int current_level = r->current_question_idx + 1;
     
     if (res == 1) {
-        // ✅ CHÍNH XÁC
-        int prize = 0;
-        
-        if (r->game_mode == 2) {
-            // MODE 2: Score Attack - Tính điểm theo thời gian
-            // Công thức: 100 điểm cơ bản + (30 - thời gian) * 10
-            // Trả lời nhanh = điểm cao
-            int time_bonus = (30 - (int)elapsed);
-            if (time_bonus < 0) time_bonus = 0;
-            prize = 100 + time_bonus * 10;
-            
-            // Cộng dồn điểm
-            r->members[idx].score += prize;
-        } else {
-            // MODE 0 & 1: Practice/Elimination - Tiền thưởng cố định
-            prize = get_prize_for_level(current_level);
-            
-            // Ghi đè điểm (không cộng dồn)
-            r->members[idx].score = prize;
-        }
-        
-        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Diem/Tien: %d", 
-                current_level, r->members[idx].score);
-        
-        return 1; // Trả lời đúng
-    } 
-    else {
-        // ❌ SAI HOẶC HẾT GIỜ
-        
-        if (r->game_mode == 2) {
-             // MODE 2: Score Attack
-             // Không bị loại, không mất điểm, tiếp tục chơi
-             sprintf(result_msg, "SAI ROI! Ban khong duoc diem cau nay.");
-             return 0; // Không bị loại
-        } else {
-             // MODE 0 & 1: Practice/Elimination
-             // Bị loại, giữ mốc tiền an toàn
-             
-             // Tính mốc an toàn gần nhất
-             // VD: Câu 1-5 -> 0đ, Câu 6-10 -> mốc câu 5, Câu 11-15 -> mốc câu 10
-             int safe_money = calculate_safe_reward(current_level);
-             r->members[idx].score = safe_money;
-             r->members[idx].is_eliminated = 1; // ĐÁNH DẤU BỊ LOẠI
-             
-             sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d", safe_money);
-             return 2; // Bị loại
-        }
+        // Đúng: Ghi đè điểm theo level
+        int prize = get_prize_for_level(current_level);
+        r->members[idx].score = prize;
+        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Tien: %d. Tong: %d", 
+                current_level, prize, r->members[idx].score);
+        broadcast_scores(r->id);
+        return 1; // Đúng
+    } else {
+        // Sai: Bị loại, về mốc an toàn
+        int safe_money = calculate_safe_reward(current_level);
+        r->members[idx].score = safe_money;
+        r->members[idx].is_eliminated = 1;
+        sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d. Tong: %d", safe_money, r->members[idx].score);
+        broadcast_scores(r->id);
+        return 2; // Bị loại
     }
 }
 
 /**
+ * MODE 1: LOẠI TRỪ (Elimination Mode)
+ * - Multiplayer (≥2)
+ * - Cumulative prize difference
+ * - Eliminate + remove player on wrong
+ * 
+ * @return: 3 (correct + instant advance), 2 (eliminated)
+ */
+int room_handle_answer_elimination(int user_id, char *answer, char *result_msg) {
+    Room *r = room_get_by_user(user_id);
+    if (!r || r->status != ROOM_PLAYING) {
+        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        return -1;
+    }
+    
+    // Tìm index của user
+    int idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].user_id == user_id) {
+            idx = i;
+            break;
+        }
+    }
+    
+    if (idx == -1 || r->members[idx].is_eliminated) {
+        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        return 0;
+    }
+    
+    // Lấy câu hỏi hiện tại
+    Question *q = &r->questions[r->current_question_idx];
+    double elapsed = difftime(time(NULL), r->question_start_time);
+    
+    // KIỂM TRA ĐÁP ÁN
+    int res = calculate_score(q, answer, elapsed);
+    
+    // LOGGING
+    char log_entry[64];
+    sprintf(log_entry, "%d:%d:%s,", user_id, q->id, answer);
+    if (strlen(r->game_log) + strlen(log_entry) < 4095) {
+        strcat(r->game_log, log_entry);
+    }
+    
+    int current_level = r->current_question_idx + 1;
+    
+    if (res == 1) {
+        // Đúng: Cộng dồn chênh lệch
+        int prize = get_prize_for_level(current_level);
+        int prev_prize = (current_level > 1) ? get_prize_for_level(current_level - 1) : 0;
+        int diff = prize - prev_prize;
+        
+        r->members[idx].score += diff;
+        sprintf(result_msg, "CHINH XAC! +%d diem. Tong: %d", diff, r->members[idx].score);
+        broadcast_scores(r->id);
+        
+        printf("[MODE1] Player %s correct → Advancing immediately\n", r->members[idx].username);
+        return 3; // Correct + Instant Advance
+    } else {
+        // Sai: Bị loại khỏi phòng (GIỮ NGUYÊN ĐIỂM HIỆN TẠI)
+        int final_score = r->members[idx].score;
+        int user_id = r->members[idx].user_id;
+        
+        printf("[MODE1] Player %s eliminated with score %d\n", r->members[idx].username, final_score);
+        
+        // === SAVE TO DATABASE ===
+        // 1. Save to user_stats (use room_id as temp game_id)
+        save_player_stat(global_db, user_id, r->id, final_score, 0); // rank will be updated later
+        
+        // 2. Update total_score in users table (cumulative)
+        update_user_score(global_db, user_id, final_score);
+        
+        printf("[DB] Saved player %d score: %d to database\n", user_id, final_score);
+        
+        sprintf(result_msg, "SAI ROI! Ban da bi loai. Tong: %d|eliminated:1|wrong_answer:0", final_score);
+        r->members[idx].is_eliminated = 1;
+        broadcast_scores(r->id);
+        return 2; // Bị loại
+    }
+}
+
+/**
+ * MODE 2: TỐC ĐỘ (Speed Attack Mode)
+ * - Multiplayer (≥2)
+ * - Cumulative prize + time bonus
+ * - No elimination on wrong
+ * - Track has_answered
+ * 
+ * @return: 4 (all answered → advance), 1 (correct, wait), 0 (wrong, wait)
+ */
+int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) {
+    Room *r = room_get_by_user(user_id);
+    if (!r || r->status != ROOM_PLAYING) {
+        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        return -1;
+    }
+    
+    // Tìm index của user
+    int idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].user_id == user_id) {
+            idx = i;
+            break;
+        }
+    }
+    
+    if (idx == -1 || r->members[idx].is_eliminated) {
+        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        return 0;
+    }
+    
+    // Check if already answered
+    if (r->members[idx].has_answered) {
+        strcpy(result_msg, "Ban da tra loi cau nay roi!");
+        return 0;
+    }
+    
+    // Lấy câu hỏi hiện tại
+    Question *q = &r->questions[r->current_question_idx];
+    double elapsed = difftime(time(NULL), r->question_start_time);
+    
+    // KIỂM TRA ĐÁP ÁN
+    int res = calculate_score(q, answer, elapsed);
+    
+    // LOGGING
+    char log_entry[64];
+    sprintf(log_entry, "%d:%d:%s,", user_id, q->id, answer);
+    if (strlen(r->game_log) + strlen(log_entry) < 4095) {
+        strcat(r->game_log, log_entry);
+    }
+    
+    // Mark as answered
+    r->members[idx].has_answered = 1;
+    
+    int current_level = r->current_question_idx + 1;
+    
+    if (res == 1) {
+        // Đúng: Cộng dồn chênh lệch + time bonus
+        int prize = get_prize_for_level(current_level);
+        int prev_prize = (current_level > 1) ? get_prize_for_level(current_level - 1) : 0;
+        int diff = prize - prev_prize;
+        
+        int time_bonus = (30 - (int)elapsed);
+        if (time_bonus < 0) time_bonus = 0;
+        
+        int total = diff + (time_bonus * 10);
+        r->members[idx].score += total;
+        
+        sprintf(result_msg, "CHINH XAC! +%d diem (base: %d, bonus: %d). Tong: %d", 
+                total, diff, time_bonus * 10, r->members[idx].score);
+        broadcast_scores(r->id);
+        
+        // Check if all answered
+        if (all_players_answered(r->id)) {
+            printf("[MODE2] All answered → Advancing\n");
+            return 4; // All answered, advance
+        }
+        return 1; // Correct, waiting for others
+    } else {
+        // Sai: Không loại, không điểm
+        sprintf(result_msg, "SAI ROI! Ban khong duoc diem. Tong: %d|eliminated:0|wrong_answer:1", r->members[idx].score);
+        broadcast_scores(r->id);
+        
+        // Check if all answered
+        if (all_players_answered(r->id)) {
+            printf("[MODE2] All answered (including wrong) → Advancing\n");
+            return 4; // All answered, advance
+        }
+        return 0; // Wrong, waiting for others
+    }
+}
+
+/**
+ * ===================================
+ * DISPATCHER
+ * ===================================
+ * Calls appropriate mode-specific handler
+ * 
+ * @return: Mode-specific return codes (see each handler)
+ */
+int room_handle_answer(int user_id, char *answer, char *result_msg) {
+    Room *r = room_get_by_user(user_id);
+    if (!r || r->status != ROOM_PLAYING) {
+        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        return -1;
+    }
+    
+    // Dispatch to mode-specific handler
+    if (r->game_mode == MODE_CLASSIC) {
+        return room_handle_answer_practice(user_id, answer, result_msg);
+    }
+    else if (r->game_mode == MODE_ELIMINATION) {
+        return room_handle_answer_elimination(user_id, answer, result_msg);
+    }
+    else if (r->game_mode == MODE_SCORE_ATTACK) {
+        return room_handle_answer_speedattack(user_id, answer, result_msg);
+    }
+    
+    strcpy(result_msg, "Loi: Che do khong hop le.");
+    return -1;
+}
+
+/**
  * Dừng cuộc chơi (Walk Away)
- * @param user_id: ID người muốn dừng
  * @param result_msg: Buffer để lưu kết quả
  * @return: 1 nếu thành công, 0 nếu lỗi
  * 
@@ -652,8 +844,22 @@ int room_walk_away(int user_id, char *result_msg) {
     // Giữ nguyên điểm hiện tại, không bị phạt
     r->members[idx].is_eliminated = 1; // Đánh dấu không chơi nữa
     
-    sprintf(result_msg, "Ban da dung cuoc choi. Tong tien thuong: %d", 
-            r->members[idx].score);
+    int final_score = r->members[idx].score;
+    int user_id_val = r->members[idx].user_id;
+
+    // === SAVE TO DATABASE (WALK AWAY) ===
+    // 1. Save to user_stats (use room_id as temp game_id)
+    save_player_stat(global_db, user_id_val, r->id, final_score, 0); 
+    
+    // 2. Update total_score in users table (cumulative)
+    update_user_score(global_db, user_id_val, final_score);
+    
+    printf("[DB] Saved player %d score (Walk Away): %d to database\n", user_id_val, final_score);
+
+    sprintf(result_msg, "Ban da dung cuoc choi. Tong tien thuong: %d", final_score);
+    
+    // Broadcast score update one last time
+    broadcast_scores(r->id);
     
     return 1;
 }
@@ -742,3 +948,91 @@ int room_walk_away(int user_id, char *result_msg) {
  * 
  * ============================================================
  */
+
+/**
+ * Kiểm tra xem tất cả người chơi trong phòng đã bị loại chưa
+ * @param room_id: ID phòng
+ * @return: 1 nếu tất cả bị loại, 0 nếu còn người chơi
+ */
+int room_all_eliminated(int room_id) {
+    Room *r = room_get_by_id(room_id);
+    if (!r || r->status != ROOM_PLAYING) return 0;
+    
+    int active_players = 0;
+    for (int i = 0; i < r->player_count; i++) {
+        if (!r->members[i].is_eliminated) {
+            active_players++;
+        }
+    }
+    
+    return (active_players == 0) ? 1 : 0;
+}
+
+/**
+ * Xóa người chơi khỏi phòng (Mode 1 - Elimination)
+ * Dùng khi player bị loại → Xóa khỏi members array
+ * Transfer host nếu player bị loại là host
+ */
+void room_remove_player(int room_id, int user_id) {
+    Room *r = room_get_by_id(room_id);
+    if (!r) return;
+    
+    // Find player index
+    int idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].user_id == user_id) {
+            idx = i;
+            break;
+        }
+    }
+    
+    if (idx == -1) return; // Player not found
+    
+    // Check if player is host
+    int was_host = r->members[idx].is_host;
+    
+    // Shift remaining players down
+    for (int i = idx; i < r->player_count - 1; i++) {
+        r->members[i] = r->members[i + 1];
+    }
+    
+    // Decrease count
+    r->player_count--;
+    
+    // Transfer host to first player if needed
+    if (was_host && r->player_count > 0) {
+        r->members[0].is_host = 1;
+        printf("[ROOM] Host transferred to %s\n", r->members[0].username);
+    }
+    
+    printf("[ROOM] Player removed. Room %d now has %d players\n", room_id, r->player_count);
+}
+
+/**
+ * Kiểm tra xem tất cả người chơi đã trả lời câu hiện tại (Mode 2)
+ * @return: 1 nếu tất cả đã trả lời, 0 nếu còn người chưa trả lời
+ */
+int all_players_answered(int room_id) {
+    Room *r = room_get_by_id(room_id);
+    if (!r || r->status != ROOM_PLAYING) return 0;
+    
+    for (int i = 0; i < r->player_count; i++) {
+        if (!r->members[i].is_eliminated && !r->members[i].has_answered) {
+            return 0; // Found player who hasn't answered
+        }
+    }
+    
+    return 1; // All answered
+}
+
+/**
+ * Reset trạng thái trả lời cho câu mới (Mode 2)
+ */
+void reset_answer_flags(int room_id) {
+    Room *r = room_get_by_id(room_id);
+    if (!r) return;
+    
+    for (int i = 0; i < r->player_count; i++) {
+        r->members[i].has_answered = 0;
+    }
+}

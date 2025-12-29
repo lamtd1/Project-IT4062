@@ -21,6 +21,9 @@ export const useGameLogic = () => {
     const [timeLeft, setTimeLeft] = useState(0);
     const [gameResult, setGameResult] = useState("");
     const [renderKey, setRenderKey] = useState(0);
+    const [players, setPlayers] = useState([]); // Live scores: [{username, score}, ...]
+    const [wrongAnswer, setWrongAnswer] = useState(false); // Mode 2: Dim UI when wrong
+    const [currentGameScore, setCurrentGameScore] = useState(0); // Track my current game score
 
     const [roomInfo, setRoomInfo] = useState({ id: null, name: '' });
     const [roomMembers, setRoomMembers] = useState([]);
@@ -125,17 +128,89 @@ export const useGameLogic = () => {
                     setCurrentQuestion(newQuestion);
                     setTimeLeft(parseInt(dur));
                     setGameStatus('PLAYING');
+                    setWrongAnswer(false); // Reset dimming for new question
                     setRenderKey(prev => prev + 1);
                 }
             }
             else if (opcode === 0x23) { // MSG_ANSWER_RESULT
                 const payload = textDecoder.decode(view.slice(1));
-                console.log('[ANSWER RESULT]', payload);
+
+                // Parse extended protocol: "message|eliminated:0/1|wrong_answer:0/1"
+                const parts = payload.split('|');
+                const message = parts[0];
+                const eliminated = parts[1]?.includes('eliminated:1');
+                const wrongAnswerFlag = parts[2]?.includes('wrong_answer:1');
+
+                // Parse score from message "Tong: 200" to update immediately (fixes timing bug)
+                const scoreMatch = message.match(/Tong:\s*(\d+)/);
+                let finalScore = currentGameScore; // Default to current
+                if (scoreMatch) {
+                    finalScore = parseInt(scoreMatch[1]);
+                    setCurrentGameScore(finalScore);
+                    console.log('[SCORE] Updated from answer result:', finalScore);
+                }
+
+                // Handle elimination (Mode 1)
+                if (eliminated) {
+                    console.log('[ELIMINATED]', message, 'Score:', finalScore);
+
+                    // Request updated user info from server (binary protocol)
+                    if (socket?.connected) {
+                        const refreshMsg = new Uint8Array(1);
+                        refreshMsg[0] = OPS.REFRESH_USER_INFO;
+                        socket.emit('client_to_server', refreshMsg);
+                        console.log('[USER_INFO] Requested refresh from server');
+                    }
+
+                    // Reset game state and return to lobby
+                    setGameStatus('FINISHED');
+                    setGameResult(`BẠN ĐÃ BỊ LOẠI!\n\n${message}\n\nĐiểm game: ${finalScore}`);
+                    setCurrentQuestion(null);
+                    setWrongAnswer(false);
+                    setCurrentGameScore(0); // Reset for next game
+                    return; // Don't process further
+                }
+
+                // Set wrong answer flag for UI dimming (Mode 2)
+                setWrongAnswer(wrongAnswerFlag || false);
+
+                // Log result (no blocking alerts for smooth gameplay)
+                if (wrongAnswerFlag) {
+                    console.log('[WRONG]', message);
+                } else {
+                    console.log('[ANSWER]', message);
+                }
+
+                // Question will auto-update when server broadcasts next question
+            }
+            else if (opcode === OPS.SCORE_UPDATE) { // 0x25
+                const payload = textDecoder.decode(view.slice(1));
+                // Format: "username1:score1,username2:score2,..."
+                if (payload) {
+                    const playerList = payload.split(',').filter(x => x).map(item => {
+                        const [name, sc] = item.split(':');
+                        return { username: name, score: parseInt(sc || 0) };
+                    });
+                    setPlayers(playerList);
+
+                    // Update my current game score
+                    const me = playerList.find(p => p.username === username);
+                    if (me) setCurrentGameScore(me.score);
+                    console.log('[SCORE_UPDATE]', playerList);
+                }
             }
             else if (opcode === 0x26) { // MSG_GAME_END
                 const payload = textDecoder.decode(view.slice(1));
                 setGameStatus('FINISHED');
                 setGameResult(payload);
+
+                // Request updated user info (covers Walk Away & Game Over)
+                if (socket?.connected && userId) {
+                    const refreshMsg = new Uint8Array(1);
+                    refreshMsg[0] = OPS.REFRESH_USER_INFO;
+                    socket.emit('client_to_server', refreshMsg);
+                    console.log('[USER_INFO] Requested refresh on GAME_END');
+                }
             }
             else if (opcode === 0x2B) { // MSG_WALK_AWAY
                 const msg = textDecoder.decode(view.slice(1));
@@ -164,6 +239,13 @@ export const useGameLogic = () => {
                     }));
                 }
             }
+            else if (opcode === OPS.USER_INFO_UPDATE) {
+                const payload = textDecoder.decode(view.slice(1));
+                const newScore = parseInt(payload || '0');
+                setScore(newScore);
+                console.log('[USER_INFO] Updated total_score:', newScore);
+            }
+
             else if (opcode === OPS.ROOM_DETAIL) {
                 const listStr = textDecoder.decode(view.slice(1));
                 if (!listStr) setRoomMembers([]);
@@ -236,7 +318,7 @@ export const useGameLogic = () => {
         });
 
         return () => { socket.off('server_to_client'); clearInterval(interval); };
-    }, [navigate, roomInfo.id]);
+    }, [navigate, roomInfo.id, username, userId, currentGameScore]);
 
     // Timer Countdown Effect
     useEffect(() => {
@@ -393,6 +475,8 @@ export const useGameLogic = () => {
             gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
             roomInfo, roomMembers, isHost,
             rooms, leaderboard,
+            players, // Live scores during gameplay
+            wrongAnswer, setWrongAnswer, // Mode 2: Dimming effect
             idleUsers, incomingInvite,
             setIncomingInvite, // Need this for dismissing manually
             allUsers, selectedUserDetail, setSelectedUserDetail
@@ -417,3 +501,4 @@ export const useGameLogic = () => {
         socket
     };
 };
+

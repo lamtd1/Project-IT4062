@@ -27,6 +27,7 @@ typedef struct {
     int score;
     int is_host;       // 1: Chủ phòng
     int is_eliminated; // 1: Đã bị loại
+    int has_answered;  // 1: Đã trả lời câu hiện tại (Mode 2)
 
     // --- TRẠNG THÁI TRỢ GIÚP ---
     int help_5050_used;      // 1. 50:50
@@ -48,8 +49,10 @@ typedef struct {
     int current_question_idx;   // Index câu hiện tại (0-14)
     time_t question_start_time; // Thời điểm bắt đầu câu hỏi hiện tại
     
-    char game_log[4096]; // Log diễn biến: "UserID-Answer,"
-    int game_mode; // 1: Elimination (Default), 2: Score Attack
+    char game_log[4096]; // Log diễn biến: "UserID:QuestionID:Answer,"
+    int game_mode; // 0: Practice, 1: Elimination, 2: Speed Attack
+    int game_id; // Database game_history ID (for saving stats)
+    int end_broadcasted; // Flag: 1 if game end already broadcasted
 } Room;
 
 // Khởi tạo hệ thống phòng
@@ -70,6 +73,12 @@ void room_get_list_string(char *buffer);
 // FORMAT: "host_flag:username:score,..."
 void room_get_detail_string(int room_id, char *buffer);
 
+// Mode-specific answer handlers
+int room_handle_answer_practice(int user_id, char *answer, char *result_msg);
+int room_handle_answer_elimination(int user_id, char *answer, char *result_msg);
+int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg);
+
+// Dispatcher (calls appropriate mode handler)
 int room_handle_answer(int user_id, char *answer, char *result_msg);
 int room_walk_away(int user_id, char *result_msg);
 
@@ -79,5 +88,17 @@ Room* room_get_by_id(int room_id);
 Room* room_get_by_user(int user_id);
 // Sử dụng trợ giúp trong phòng
 int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_msg);
+
+// Kiểm tra xem tất cả người chơi đã bị loại chưa
+int room_all_eliminated(int room_id);
+
+// Xóa người chơi khỏi phòng (Mode 1 elimination)
+void room_remove_player(int room_id, int user_id);
+
+// Kiểm tra xem tất cả người chơi đã trả lời câu hiện tại (Mode 2)
+int all_players_answered(int room_id);
+
+// Reset trạng thái trả lời cho câu mới (Mode 2)
+void reset_answer_flags(int room_id);
 
 #endif

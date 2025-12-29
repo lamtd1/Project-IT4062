@@ -27,6 +27,8 @@ const GameContent = () => {
     gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
     roomInfo, roomMembers, isHost,
     rooms, leaderboard,
+    players, // Live scores
+    wrongAnswer, // Mode 2: Dimming effect
     idleUsers, incomingInvite, setIncomingInvite
   } = state;
 
@@ -143,6 +145,9 @@ const GameContent = () => {
               timeLeft={timeLeft}
               handleAnswer={handleAnswer}
               socket={socket}
+              players={players}
+              myUsername={username}
+              wrongAnswer={wrongAnswer}
             />
           )
         } />

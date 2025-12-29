@@ -10,8 +10,16 @@ const AdminPage = ({
     onDeleteUser,
 }) => {
     useEffect(() => {
-        // Load users only once when component mounts
+        // Load users immediately on mount
         onGetAllUsers();
+
+        // Set up auto-refresh every 5 seconds
+        const interval = setInterval(() => {
+            onGetAllUsers();
+        }, 5000);
+
+        // Cleanup interval on unmount
+        return () => clearInterval(interval);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Empty array = run once on mount only
 
@@ -30,24 +38,18 @@ const AdminPage = ({
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
                             Admin Dashboard
                         </h1>
-                        <p className="text-gray-600">Chào mừng, <span className="font-semibold text-indigo-600">{username}</span></p>
+                        <p className="text-gray-600">
+                            Chào mừng, <span className="font-semibold text-indigo-600">{username}</span>
+                            <span className="ml-3 text-xs text-gray-500">• Tự động cập nhật mỗi 5 giây</span>
+                        </p>
                     </div>
-                    <div className="flex gap-3">
-                        <Button
-                            variant="outline"
-                            onClick={onGetAllUsers}
-                            className="bg-white hover:bg-gray-100"
-                        >
-                            Làm mới
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={onLogout}
-                            className="bg-white hover:bg-gray-100"
-                        >
-                            Đăng xuất
-                        </Button>
-                    </div>
+                    <Button
+                        variant="outline"
+                        onClick={onLogout}
+                        className="bg-white hover:bg-gray-100"
+                    >
+                        Đăng xuất
+                    </Button>
                 </div>
 
                 {/* User Management Card */}

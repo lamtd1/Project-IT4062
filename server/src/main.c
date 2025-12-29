@@ -285,7 +285,7 @@ int main(){
                     char *payload = buffer + 1;
 
                     // Just print for debug
-                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS) {
+                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == 0x60) {
                          // Don't print payload for these to avoid confusion
                          printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
                     } else {
@@ -322,8 +322,20 @@ int main(){
                             resp[0] = MSG_LEADERBOARD_LIST; // 0x46
                             strcpy(resp + 1, board);
                             send_with_delimiter(sd, resp, 1 + strlen(board));
-                            // printf("Sent leaderboard to client %d\n", sd);
-                            // printf("Sent leaderboard to client %d\n", sd);
+                            break;
+                        }
+                        
+                        case 0x60: { // MSG_REFRESH_USER_INFO
+                            // Get updated score from database for current user
+                            int user_id = sessions[i].user_id;
+                            int updated_score = get_user_score(db, user_id);
+                            
+                            char resp[32];
+                            resp[0] = 0x61; // MSG_USER_INFO_UPDATE
+                            sprintf(resp + 1, "%d", updated_score);
+                            send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
+                            
+                            printf("[USER_INFO] Sent updated score %d to user %d\n", updated_score, user_id);
                             break;
                         }
 
@@ -412,6 +424,10 @@ int main(){
                                 if (res == 1) {
                                     // Start Success -> Broadcast First Question Immediate
                                     printf("User %s started game in room %d\n", sessions[i].username, r->id);
+                                    
+                                    // Broadcast initial scores (all 0) so UI shows player list
+                                    broadcast_scores(r->id);
+                                    
                                     broadcast_question(r->id);
                                 } else {
                                     printf("Start game failed. Error: %d\n", res);
@@ -434,30 +450,73 @@ int main(){
                             // Log debug
                             printf("User %s answered %s. Result: %s\n", sessions[i].username, payload, result_msg);
                             
-                            // If answer is correct (return 1), move to next question immediately
-                            if (answer_result == 1) {
-                                Room *r = room_get_by_user(sessions[i].user_id);
-                                if (r && r->status == ROOM_PLAYING) {
-                                    r->current_question_idx++;
-                                    
-                                    // Check if game finished (all 15 questions answered)
-                                    if (r->current_question_idx >= 15) {
-                                        // Game Over - Won!
-                                        printf("[GAME] Room %d finished! User won!\n", r->id);
-                                        broadcast_end_game(r->id, db);
-                                        r->status = ROOM_FINISHED;
-                                    } else {
-                                        // Broadcast next question immediately
-                                        r->question_start_time = time(NULL);
-                                        broadcast_question(r->id);
-                                    }
+                            Room *r = room_get_by_user(sessions[i].user_id);
+                            if (!r) break;
+                            
+                            // Return codes:
+                            // 0 = Wrong (Mode 2 no elimination)
+                            // 1 = Correct (Mode 0/2 wait)
+                            // 2 = Wrong + Eliminated (Mode 0/1)
+                            // 3 = Correct + Instant Advance (Mode 1)
+                            // 4 = All Answered → Advance (Mode 2)
+                            
+                            if (answer_result == 1 && r->game_mode == MODE_CLASSIC) {
+                                // Mode 0: Advance immediately
+                                r->current_question_idx++;
+                                if (r->current_question_idx >= 15) {
+                                    printf("[GAME] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
                                 }
                             }
-                            // If answer is wrong (return 2), player is eliminated - game ends
+                            else if (answer_result == 3) {
+                                // Mode 1: Instant advance (first correct answer)
+                                r->current_question_idx++;
+                                reset_answer_flags(r->id); // Reset for next question
+                                
+                                if (r->current_question_idx >= 15) {
+                                    printf("[MODE1] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
+                                }
+                            }
+                            else if (answer_result == 4) {
+                                // Mode 2: All answered → Advance
+                                r->current_question_idx++;
+                                reset_answer_flags(r->id); // Reset for next question
+                                
+                                if (r->current_question_idx >= 15) {
+                                    printf("[MODE2] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
+                                }
+                            }
                             else if (answer_result == 2) {
-                                Room *r = room_get_by_user(sessions[i].user_id);
-                                if (r) {
-                                    printf("[GAME] Room %d - Player eliminated\n", r->id);
+                                // Player eliminated
+                                printf("[GAME] Room %d - Player %s eliminated\n", r->id, sessions[i].username);
+                                printf("[DEBUG] Game mode = %d, MODE_ELIMINATION = %d\n", r->game_mode, MODE_ELIMINATION);
+                                
+                                // Mode 1: Remove player from room
+                                if (r->game_mode == MODE_ELIMINATION) {
+                                    printf("[DEBUG] Calling room_remove_player for user %d\n", sessions[i].user_id);
+                                    room_remove_player(r->id, sessions[i].user_id);
+                                    // Note: r pointer may be invalid after removal if it was last player
+                                    r = room_get_by_id(r->id); // Re-get pointer
+                                    printf("[DEBUG] After removal, room has %d players\n", r ? r->player_count : 0);
+                                }
+                                
+                                // Check if ALL players eliminated
+                                if (r && room_all_eliminated(r->id)) {
+                                    printf("[GAME] Room %d - All players eliminated. Game over.\n", r->id);
                                     broadcast_end_game(r->id, db);
                                     r->status = ROOM_FINISHED;
                                 }

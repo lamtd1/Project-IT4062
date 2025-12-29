@@ -59,6 +59,43 @@ void broadcast_question(int room_id) {
     printf("Broadcasting Question Level %d to Room %d\n", r->current_question_idx + 1, room_id);
 }
 
+/**
+ * Broadcast current scores to all players (live updates during game)
+ * Format: MSG_SCORE_UPDATE (0x25) + "username1:score1,username2:score2,..."
+ */
+void broadcast_scores(int room_id) {
+    Room *r = room_get_by_id(room_id);
+    if (!r || r->player_count == 0) return;
+    
+    char msg[512];
+    msg[0] = MSG_SCORE_UPDATE; // 0x25
+    
+    // Build payload: "username1:score1,username2:score2,..."
+    char payload[500] = "";
+    for (int i = 0; i < r->player_count; i++) {
+        char temp[64];
+        sprintf(temp, "%s:%d,", r->members[i].username, r->members[i].score);
+        strcat(payload, temp);
+    }
+    
+    // Remove trailing comma
+    int len = strlen(payload);
+    if (len > 0 && payload[len - 1] == ',') {
+        payload[len - 1] = '\0';
+    }
+    
+    strcpy(msg + 1, payload);
+    
+    // Send to all players
+    for (int i = 0; i < r->player_count; i++) {
+        if (r->members[i].socket_fd > 0) {
+            send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
+        }
+    }
+    
+    printf("[SCORES] Broadcast to Room %d: %s\n", room_id, payload);
+}
+
 // Helper: Broadcast Game End
 void broadcast_end_game(int room_id, sqlite3 *db) {
     Room *r = room_get_by_id(room_id);
@@ -93,13 +130,7 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
     // TẤT CẢ MODES: Reset về WAITING để cho phép chơi lại
     r->status = ROOM_WAITING;
     r->current_question_idx = 0;
-    
-    // Reset states
-    for (int i = 0; i < r->player_count; i++) {
-        r->members[i].score = 0;
-        r->members[i].is_eliminated = 0;
-    }
-    
+
     // MODE 0 (Classic): Reset về WAITING thay vì FINISHED
     if (r->game_mode == MODE_CLASSIC) {
         // Gửi thông báo kết thúc
@@ -111,6 +142,12 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
                 send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
             }
         }
+        
+        // Reset states for Mode 0 before returning
+        for (int i = 0; i < r->player_count; i++) {
+            r->members[i].score = 0;
+            r->members[i].is_eliminated = 0;
+        }
         return; // Không lưu history
     }
     
@@ -120,7 +157,13 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
         save_history(db, r->name, winner_id, r->game_mode, r->game_log); 
     }
     
-    // Broadcast game end message to all players
+    // Reset states
+    for (int i = 0; i < r->player_count; i++) {
+        r->members[i].score = 0;
+        r->members[i].is_eliminated = 0;
+    }
+    
+    // Broadcast game end message to all players (AFTER RESET - Buggy state)
     for (int i = 0; i < r->player_count; i++) {
         if (r->members[i].socket_fd > 0) {
             char msg[128];

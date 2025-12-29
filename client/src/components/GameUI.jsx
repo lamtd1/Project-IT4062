@@ -2,13 +2,53 @@ import React from 'react';
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 
-const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
-    <div className="min-h-screen w-full flex items-center justify-center p-6 bg-zinc-950 text-zinc-50">
-        <div className="max-w-7xl w-full grid grid-cols-12 gap-6">
+const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket, players = [], myUsername, wrongAnswer = false }) => (
+    <div className="min-h-screen w-full flex flex-col p-6 bg-zinc-950 text-zinc-50">
+        {/* Score Header */}
+        {players.length > 0 && (
+            <div className="w-full max-w-7xl mx-auto mb-6">
+                <div className="bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-2xl p-4 shadow-xl">
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div className="mr-auto flex items-center gap-2 text-zinc-400 font-bold uppercase tracking-wider text-sm px-2">
+                            <span>🏆</span>
+                            <span>Bảng điểm</span>
+                        </div>
+                        {players.map((p, idx) => (
+                            <div
+                                key={idx}
+                                className={`flex items-center gap-3 px-4 py-2 rounded-xl border transition-all ${p.username === myUsername
+                                    ? 'bg-indigo-500/10 border-indigo-500/50 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+                                    : 'bg-zinc-800/50 border-zinc-700/50'
+                                    }`}
+                            >
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm shadow-inner ${p.username === myUsername
+                                    ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                                    : 'bg-zinc-700 text-zinc-300'
+                                    }`}>
+                                    {p.username.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col leading-tight">
+                                    <span className={`text-sm font-bold ${p.username === myUsername ? 'text-indigo-400' : 'text-zinc-300'
+                                        }`}>
+                                        {p.username} {p.username === myUsername && '(Bạn)'}
+                                    </span>
+                                    <span className="text-xs font-mono text-zinc-400 font-medium">
+                                        {p.score.toLocaleString()} pts
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        <div className="max-w-7xl w-full mx-auto grid grid-cols-12 gap-6">
             {/* Main Content Area - Left Side */}
             <div className="col-span-9 flex flex-col gap-6">
-                {/* Question Display */}
-                <Card className="bg-zinc-900 border-zinc-800 shadow-xl min-h-[300px] flex items-center justify-center relative overflow-hidden">
+                {/* Question Display - Dimmed if wrong answer (Mode 2) */}
+                <Card className={`bg-zinc-900 border-zinc-800 shadow-xl min-h-[300px] flex items-center justify-center relative overflow-hidden transition-all duration-500 ${wrongAnswer ? 'opacity-50 grayscale' : ''
+                    }`}>
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
                     <CardContent className="p-12">
                         <h2 className="text-3xl font-bold text-center leading-relaxed text-zinc-100">

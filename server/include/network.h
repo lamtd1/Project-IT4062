@@ -14,6 +14,9 @@ void broadcast_question(int room_id);
 // Broadcast game end message and save scores to database
 void broadcast_end_game(int room_id, sqlite3 *db);
 
+// Broadcast current scores to all players in room (live updates)
+void broadcast_scores(int room_id);
+
 // Authentication Handlers
 int handle_register(sqlite3 *db, int client_fd, char *payload);
 int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload);

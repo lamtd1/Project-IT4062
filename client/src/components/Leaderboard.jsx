@@ -9,9 +9,7 @@ const Leaderboard = ({ data, onRefresh }) => (
                 <CardTitle className="text-base font-bold flex items-center gap-2 text-zinc-900">
                     <span className="text-xl">🏆</span> Bảng Xếp Hạng
                 </CardTitle>
-                <Button variant="ghost" size="sm" onClick={onRefresh} className="h-7 text-xs px-2 hover:bg-zinc-200 text-zinc-600">
-                    Làm mới
-                </Button>
+
             </div>
         </CardHeader>
         <CardContent className="space-y-1 p-2 flex-1 overflow-y-auto">
@@ -22,8 +20,8 @@ const Leaderboard = ({ data, onRefresh }) => (
                     <div key={idx} className="flex justify-between items-center p-2.5 rounded-md hover:bg-zinc-50 transition-colors cursor-default group">
                         <div className="flex items-center gap-3">
                             <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-yellow-100 text-yellow-700' :
-                                    idx === 1 ? 'bg-zinc-200 text-zinc-600' :
-                                        idx === 2 ? 'bg-amber-100 text-amber-700' : 'text-zinc-400 bg-transparent'
+                                idx === 1 ? 'bg-zinc-200 text-zinc-600' :
+                                    idx === 2 ? 'bg-amber-100 text-amber-700' : 'text-zinc-400 bg-transparent'
                                 }`}>
                                 {idx + 1}
                             </div>

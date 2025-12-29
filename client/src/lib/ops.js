@@ -28,6 +28,20 @@ export const OPS = {
     GET_LEADERBOARD: 0x45,
     LEADERBOARD_LIST: 0x46,
 
+    REFRESH_USER_INFO: 0x60,  // Request updated user info
+    USER_INFO_UPDATE: 0x61,    // Server response with updated info
+
+    // Game Opcodes
+    GAME_START: 0x20,
+    QUESTION: 0x21,
+    ANSWER: 0x22,
+    ANSWER_RESULT: 0x23,
+    SCORE_UPDATE: 0x25,
+    GAME_END: 0x26,
+    WALK_AWAY: 0x2B,
+    USE_HELP: 0x2C,
+    HELP_RESULT: 0x2D,
+
     // Admin Opcodes
     GET_ALL_USERS: 0x50,
     ALL_USERS_RESULT: 0x51,

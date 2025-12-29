@@ -15,11 +15,22 @@ const HomePage = ({
   leaderboard,
   onRequestLeaderboard,
 }) => {
-  // Initial load only
+  // Initial load and auto-refresh every 5s
   useEffect(() => {
+    // Initial fetch
     if (onRequestLeaderboard) {
       onRequestLeaderboard();
     }
+
+    // Auto-refresh interval
+    const intervalId = setInterval(() => {
+      if (onRequestLeaderboard) {
+        onRequestLeaderboard();
+      }
+    }, 5000);
+
+    // Cleanup
+    return () => clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
