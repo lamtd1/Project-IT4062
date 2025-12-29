@@ -39,8 +39,11 @@ typedef struct {
 // Cấu trúc phòng
 typedef struct {
     int id;
-    char name[50];
+    char name[64];
+    int game_mode;              // 0: Classic, 1: Elimination, 2: Score Attack
     RoomStatus status;
+    int end_broadcasted;        // 1 if game end was already broadcasted
+    
     int player_count;
     RoomMember members[MAX_PLAYERS_PER_ROOM];
     
@@ -50,7 +53,6 @@ typedef struct {
     time_t question_start_time; // Thời điểm bắt đầu câu hỏi hiện tại
     
     char game_log[4096]; // Log diễn biến: "UserID-Answer,"
-    int game_mode; // 1: Elimination (Default), 2: Score Attack
 } Room;
 
 // Khởi tạo hệ thống phòng
