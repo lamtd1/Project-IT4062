@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
     password TEXT NOT NULL,
     total_win INTEGER DEFAULT 0,
     total_score INTEGER DEFAULT 0,
-    is_online INTEGER DEFAULT 0
+    role INTEGER DEFAULT 1, -- 0: Admin, 1: User
+    is_deleted INTEGER DEFAULT 0 -- 0: Active, 1: Soft deleted
 );
 
 -- Bảng câu hỏi

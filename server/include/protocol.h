@@ -10,43 +10,50 @@
 #define MSG_REGISTER_FAILED  0x07
 #define MSG_SERVER_FULL      0x08
 
-#define MSG_ROOM_CREATE 0x10
-#define MSG_ROOM_JOIN 0x11
-#define MSG_ROOM_UPDATE 0x12
-#define MSG_ROOM_INVITE 0x13
-#define MSG_GET_ROOMS 0x27
-#define MSG_ROOM_LIST 0x28
+#define MSG_ROOM_CREATE      0x10
+#define MSG_ROOM_JOIN        0x11
+#define MSG_ROOM_UPDATE      0x12
+#define MSG_ROOM_INVITE      0x13
+#define MSG_GET_ROOMS        0x27
+#define MSG_ROOM_LIST        0x28
 
-#define MSG_GAME_START 0x20
-#define MSG_QUESTION 0x21
-#define MSG_ANSWER 0x22
-#define MSG_ANSWER_RESULT 0x23
-#define MSG_ELIMINATE 0x24
-#define MSG_SCORE_UPDATE 0x25
-#define MSG_GAME_END 0x26
-#define MSG_GET_ROOMS 0x27
-#define MSG_ROOM_LIST 0x28
-#define MSG_GET_ROOM_DETAIL 0x29
-#define MSG_ROOM_DETAIL 0x2A
+#define MSG_GAME_START       0x20
+#define MSG_QUESTION         0x21
+#define MSG_ANSWER           0x22
+#define MSG_ANSWER_RESULT    0x23
+#define MSG_ELIMINATE        0x24
+#define MSG_SCORE_UPDATE     0x25
+#define MSG_GAME_END         0x26
+#define MSG_GET_ROOMS        0x27
+#define MSG_ROOM_LIST        0x28
+#define MSG_GET_ROOM_DETAIL  0x29
+#define MSG_ROOM_DETAIL      0x2A
 
-#define MSG_LOGOUT 0x30
-#define MSG_LOGOUT 0x30
-#define MSG_LEAVE_ROOM 0x31
-#define MSG_WALK_AWAY 0x2B
-#define MSG_USE_HELP 0x2C
-#define MSG_HELP_RESULT 0x2D
+#define MSG_LOGOUT           0x30
+#define MSG_LOGOUT           0x30
+#define MSG_LEAVE_ROOM       0x31
+#define MSG_WALK_AWAY        0x2B
+#define MSG_USE_HELP         0x2C
+#define MSG_HELP_RESULT      0x2D
 
 
-#define MSG_GET_ONLINE_USERS 0x40
+#define MSG_GET_ONLINE_USERS    0x40
 #define MSG_ONLINE_USERS_RESULT 0x41
-#define MSG_GET_LEADERBOARD 0x45
-#define MSG_GET_LEADERBOARD 0x45
-#define MSG_LEADERBOARD_LIST 0x46
-#define MSG_INVITE_FRIEND 0x47
-#define MSG_INVITE_RECEIVED 0x48
+#define MSG_GET_LEADERBOARD     0x45
+#define MSG_LEADERBOARD_LIST    0x46
+#define MSG_INVITE_FRIEND       0x47
+#define MSG_INVITE_RECEIVED     0x48
 
-#define MSG_GET_IDLE_USERS 0x42
-#define MSG_IDLE_USERS_LIST 0x43
+#define MSG_GET_IDLE_USERS      0x42
+#define MSG_IDLE_USERS_LIST     0x43
+
+// Admin protocol messages
+#define MSG_GET_ALL_USERS       0x50
+#define MSG_ALL_USERS_RESULT    0x51
+#define MSG_DELETE_USER         0x52
+#define MSG_DELETE_USER_RESULT  0x53
+#define MSG_GET_USER_DETAIL     0x54
+#define MSG_USER_DETAIL_RESULT  0x55
 
 // Cấu trúc ngừoi dùng trong gói tin
 typedef struct {
@@ -60,6 +67,7 @@ typedef struct {
     int user_id;
     char username[50];
     int is_logged_in;
+    int role; // 0: Admin, 1: User
 } Session;
 
 

@@ -1,9 +1,35 @@
 -- Tài khoản mẫu (mật khẩu đang để thô để bạn dễ test)
+-- Admin account (role=0)
 INSERT INTO
-    users (username, password)
-VALUES ('nguyenvana', 'password123'),
-    ('tranvanb', 'password456'),
-    ('lethic', 'password789');
+    users (
+        username,
+        password,
+        role,
+        is_deleted
+    )
+VALUES ('admin', 'admin123', 0, 0);
+
+-- Regular users (role=1)
+INSERT INTO
+    users (
+        username,
+        password,
+        role,
+        is_deleted
+    )
+VALUES (
+        'nguyenvana',
+        'password123',
+        1,
+        0
+    ),
+    (
+        'tranvanb',
+        'password456',
+        1,
+        0
+    ),
+    ('lethic', 'password789', 1, 0);
 
 INSERT INTO
     game_history (

@@ -12,7 +12,6 @@ int send_with_delimiter(int socket_fd, const char *data, size_t len);
 void broadcast_question(int room_id);
 
 // Broadcast game end message and save scores to database
-// Broadcast game end message and save scores to database
 void broadcast_end_game(int room_id, sqlite3 *db);
 
 // Authentication Handlers

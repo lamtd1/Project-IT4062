@@ -13,12 +13,16 @@ int get_user_score(sqlite3 *db, int user_id);
 void update_user_score(sqlite3 *db, int id, int score);
 void get_user(sqlite3 *db);
 
-
 void get_questions(sqlite3* db, int difficulty, int limit);
-
 void save_history(sqlite3 *db, char *room, int winner_id, int game_mdoe, char *log);
 void save_player_stat(sqlite3 *db, int user_id, int game_id, int score, int rank);
-
 void delete_record(sqlite3 *db, char *table, char *condition);
+
+// Admin functions
+int get_user_role(sqlite3 *db, int user_id);
+int is_user_deleted(sqlite3 *db, int user_id);
+void get_all_users_for_admin(sqlite3 *db, char *buffer);
+int soft_delete_user(sqlite3 *db, int user_id);
+void get_user_detail(sqlite3 *db, int user_id, char *buffer);
 
 #endif

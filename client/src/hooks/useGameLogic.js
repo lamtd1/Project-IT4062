@@ -8,11 +8,11 @@ const socket = io('http://localhost:4000');
 export const useGameLogic = () => {
     const navigate = useNavigate();
 
-    // --- STATE ---
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [userId, setUserId] = useState(null);
     const [score, setScore] = useState(0);
+    const [userRole, setUserRole] = useState(1); // 0=admin, 1=user
     const [status, setStatus] = useState({ msg: '', type: '' });
 
     // Game State
@@ -32,6 +32,10 @@ export const useGameLogic = () => {
     // Invitation State
     const [idleUsers, setIdleUsers] = useState([]);
     const [incomingInvite, setIncomingInvite] = useState(null);
+
+    // Admin State
+    const [allUsers, setAllUsers] = useState([]); // For admin panel
+    const [selectedUserDetail, setSelectedUserDetail] = useState(null);
 
     // --- SOCKET HANDLERS ---
     useEffect(() => {
@@ -61,11 +65,13 @@ export const useGameLogic = () => {
 
             if (opcode === OPS.LOGIN_SUCCESS) {
                 const payload = textDecoder.decode(view.slice(1));
-                const [idStr, scoreStr] = payload.split(':');
+                const [idStr, scoreStr, roleStr] = payload.split(':');
+                const role = parseInt(roleStr || '1');
                 setUserId(parseInt(idStr));
                 setScore(parseInt(scoreStr || '0'));
+                setUserRole(role);
                 setStatus({ msg: "Đăng nhập thành công!", type: 'success' });
-                setTimeout(() => navigate('/home'), 500);
+                setTimeout(() => navigate(role === 0 ? '/admin' : '/home'), 500);
             }
             else if (opcode === OPS.LOGIN_FAILED) {
                 setStatus({ msg: "Sai tài khoản hoặc mật khẩu!", type: 'error' });
@@ -179,6 +185,53 @@ export const useGameLogic = () => {
                 const [hostName, roomId] = payload.split(':');
                 setIncomingInvite({ hostName, roomId });
                 setTimeout(() => setIncomingInvite(null), 10000);
+            }
+            // --- ADMIN RESPONSES ---
+            else if (opcode === OPS.ALL_USERS_RESULT) {
+                const listStr = textDecoder.decode(view.slice(1));
+                if (!listStr) setAllUsers([]);
+                else {
+                    const users = listStr.split(',').map(item => {
+                        const [id, username, total_win, total_score, is_online] = item.split(':');
+                        return {
+                            id: parseInt(id),
+                            username,
+                            total_win: parseInt(total_win),
+                            total_score: parseInt(total_score),
+                            is_online: parseInt(is_online) === 1
+                        };
+                    });
+                    // Sort: online first, then by username
+                    users.sort((a, b) => {
+                        if (a.is_online !== b.is_online) return b.is_online - a.is_online;
+                        return a.username.localeCompare(b.username);
+                    });
+                    setAllUsers(users);
+                }
+            }
+            else if (opcode === OPS.DELETE_USER_RESULT) {
+                const success = view[1] === 49; // ASCII '1'
+                if (success) {
+                    alert('Xóa người dùng thành công!');
+                    // Refresh user list
+                    const packet = new Uint8Array(1);
+                    packet[0] = OPS.GET_ALL_USERS;
+                    socket.emit("client_to_server", packet);
+                } else {
+                    alert('Xóa người dùng thất bại!');
+                }
+            }
+            else if (opcode === OPS.USER_DETAIL_RESULT) {
+                const payload = textDecoder.decode(view.slice(1));
+                if (payload) {
+                    const [id, username, total_win, total_score] = payload.split(':');
+                    setSelectedUserDetail({
+                        id: parseInt(id),
+                        username,
+                        total_win: parseInt(total_win),
+                        total_score: parseInt(total_score)
+                    });
+                }
             }
         });
 
@@ -308,15 +361,41 @@ export const useGameLogic = () => {
         console.log('[REPLAY] State reset to LOBBY');
     };
 
+    // --- ADMIN HANDLERS ---
+    const handleGetAllUsers = () => {
+        const packet = new Uint8Array(1);
+        packet[0] = OPS.GET_ALL_USERS;
+        socket.emit("client_to_server", packet);
+    };
+
+    const handleDeleteUser = (userId) => {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(userId.toString());
+        const packet = new Uint8Array(1 + bytes.length);
+        packet[0] = OPS.DELETE_USER;
+        packet.set(bytes, 1);
+        socket.emit("client_to_server", packet);
+    };
+
+    const handleGetUserDetail = (userId) => {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(userId.toString());
+        const packet = new Uint8Array(1 + bytes.length);
+        packet[0] = OPS.GET_USER_DETAIL;
+        packet.set(bytes, 1);
+        socket.emit("client_to_server", packet);
+    };
+
     return {
         state: {
             username, setUsername, password, setPassword,
-            userId, score, status,
+            userId, score, status, userRole,
             gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
             roomInfo, roomMembers, isHost,
             rooms, leaderboard,
             idleUsers, incomingInvite,
-            setIncomingInvite // Need this for dismissing manually
+            setIncomingInvite, // Need this for dismissing manually
+            allUsers, selectedUserDetail, setSelectedUserDetail
         },
         actions: {
             handleSubmit,
@@ -331,6 +410,9 @@ export const useGameLogic = () => {
             handleSendInvite,
             handleAcceptInvite,
             handleReplay,
+            handleGetAllUsers,
+            handleDeleteUser,
+            handleGetUserDetail,
         },
         socket
     };

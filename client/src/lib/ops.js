@@ -27,4 +27,12 @@ export const OPS = {
 
     GET_LEADERBOARD: 0x45,
     LEADERBOARD_LIST: 0x46,
+
+    // Admin Opcodes
+    GET_ALL_USERS: 0x50,
+    ALL_USERS_RESULT: 0x51,
+    DELETE_USER: 0x52,
+    DELETE_USER_RESULT: 0x53,
+    GET_USER_DETAIL: 0x54,
+    USER_DETAIL_RESULT: 0x55,
 };

@@ -179,16 +179,20 @@ int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
         s->user_id = user_id;
         strcpy(s->username, username);
 
-        // Get Score
+        // Get Score and Role
         int score = get_user_score(db, user_id);
+        int role = get_user_role(db, user_id);
+        
+        // Save role to session
+        s->role = role;
         
         response[0] = MSG_LOGIN_SUCCESS; // 0x03
         
-        // Gửi: [Op][ID:Score] (String)
-        sprintf(response + 1, "%d:%d", user_id, score); 
+        // Gửi: [Op][ID:Score:Role] (String)
+        sprintf(response + 1, "%d:%d:%d", user_id, score, role); 
         send_with_delimiter(client_fd, response, 1 + strlen(response+1));
         
-        printf("User '%s' logged in (ID: %d, Score: %d)\n", username, user_id, score);
+        printf("User '%s' logged in (ID: %d, Score: %d, Role: %d)\n", username, user_id, score, role);
         return 1;
     } else {
         response[0] = MSG_LOGIN_FAILED;

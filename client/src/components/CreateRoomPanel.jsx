@@ -13,11 +13,8 @@ const CreateRoomPanel = ({ onCreate }) => {
             <CardHeader>
                 <div className="flex items-center justify-between">
                     <CardTitle className="text-xl flex items-center gap-2 text-zinc-900">
-                        <span className="text-2xl">🎮</span> Tạo phòng mới
+                        <span className="text-2xl">Tạo phòng mới</span>
                     </CardTitle>
-                    <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-zinc-100 border border-zinc-200 text-zinc-500">
-                        Beta
-                    </span>
                 </div>
                 <CardDescription className="text-zinc-500">
                     Chọn chế độ và đặt tên để bắt đầu.

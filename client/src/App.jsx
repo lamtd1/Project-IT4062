@@ -16,6 +16,7 @@ import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import HomePage from './components/HomePage';
 import GameUI from './components/GameUI';
+import AdminPage from './components/AdminPage';
 import { Button } from "./components/ui/button";
 
 const GameContent = () => {
@@ -82,6 +83,15 @@ const GameContent = () => {
             onRequestLeaderboard={handleGetLeaderboard}
           />
         } />
+        <Route path="/admin" element={
+          <AdminPage
+            username={username}
+            onLogout={handleLogout}
+            allUsers={state.allUsers}
+            onGetAllUsers={actions.handleGetAllUsers}
+            onDeleteUser={actions.handleDeleteUser}
+          />
+        } />
         <Route path="/room" element={
           gameStatus === 'LOBBY' ? (
             <RoomPage
@@ -104,9 +114,9 @@ const GameContent = () => {
                 <h2 className="text-4xl font-bold text-zinc-900 mb-2">Game Kết Thúc!</h2>
                 <p className="text-lg text-zinc-600 mb-4">{gameResult}</p>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-                <button 
+                <button
                   onClick={handleReplay}
                   className="group relative px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 overflow-hidden"
                 >
@@ -115,9 +125,9 @@ const GameContent = () => {
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 </button>
-                
-                <button 
-                  onClick={handleLeaveRoom} 
+
+                <button
+                  onClick={handleLeaveRoom}
                   className="px-8 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl font-bold shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 border-2 border-zinc-200"
                 >
                   <span className="flex items-center justify-center gap-2">
