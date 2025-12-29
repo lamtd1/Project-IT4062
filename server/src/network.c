@@ -96,12 +96,40 @@ void broadcast_scores(int room_id) {
     printf("[SCORES] Broadcast to Room %d: %s\n", room_id, payload);
 }
 
+/**
+ * Reset room state for replay
+ * Called after game ends to allow players to start a new game
+ */
+void reset_room_for_replay(Room *r) {
+    // Reset room-level state
+    r->status = ROOM_WAITING;
+    r->current_question_idx = 0;
+    r->game_log[0] = '\0';
+    r->end_broadcasted = 0;
+    r->game_id = 0; // Will be set on next game
+    
+    // Reset all player states
+    for (int i = 0; i < r->player_count; i++) {
+        r->members[i].score = 0;
+        r->members[i].is_eliminated = 0;
+        r->members[i].has_answered = 0;
+        
+        // Reset help/lifeline flags
+        r->members[i].help_5050_used = 0;
+        r->members[i].help_audience_used = 0;
+        r->members[i].help_phone_used = 0;
+        r->members[i].help_expert_used = 0;
+    }
+    
+    printf("[REPLAY] Room %d reset for replay\n", r->id);
+}
+
 // Helper: Broadcast Game End
 void broadcast_end_game(int room_id, sqlite3 *db) {
     Room *r = room_get_by_id(room_id);
     if (!r) return;
     
-    // MODE 0 (Classic): KHÔNG cập nhật điểm tích lũy vào DB
+    // We update the database in broadcast_end_game
     if (r->game_mode != MODE_CLASSIC) {
         // Save scores to database for all players (Mode 1 & 2 only)
         for (int i = 0; i < r->player_count; i++) {
@@ -111,12 +139,8 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             }
         }
     }
-
+    
     // SAVE HISTORY
-    // Assuming Single Player for now or last winner standing
-    // In multi-player, winner might be determined earlier.
-    // For now, let's just save.
-    // Winner ID: 0 (or find best score)
     int winner_id = 0;
     int max_score = -1;
     for(int i=0; i<r->player_count; i++) {
@@ -128,10 +152,10 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
     
     
     // TẤT CẢ MODES: Reset về WAITING để cho phép chơi lại
-    r->status = ROOM_WAITING;
-    r->current_question_idx = 0;
+    // r->status = ROOM_WAITING; // Moved to reset_room_for_replay
+    // r->current_question_idx = 0; // Moved to reset_room_for_replay
 
-    // MODE 0 (Classic): Reset về WAITING thay vì FINISHED
+    // MODE 0 (Classic): Reset and return early (no DB save)
     if (r->game_mode == MODE_CLASSIC) {
         // Gửi thông báo kết thúc
         for (int i = 0; i < r->player_count; i++) {
@@ -143,27 +167,20 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             }
         }
         
-        // Reset states for Mode 0 before returning
-        for (int i = 0; i < r->player_count; i++) {
-            r->members[i].score = 0;
-            r->members[i].is_eliminated = 0;
-        }
+        // Reset for replay
+        reset_room_for_replay(r);
         return; // Không lưu history
     }
     
     // Save to DB only if Multiplayer (player_count > 1) AND NOT Practice Mode (0)
     if (r->player_count > 1 && r->game_mode != 0) {
-        // Log "Multiplayer" logic
-        save_history(db, r->name, winner_id, r->game_mode, r->game_log); 
+        // Save history and get the game_id
+        int game_id = save_history(db, r->name, winner_id, r->game_mode, r->game_log);
+        r->game_id = game_id; // Store for player stats
+        printf("[DB] Game ID %d saved for room %d\n", game_id, r->id);
     }
     
-    // Reset states
-    for (int i = 0; i < r->player_count; i++) {
-        r->members[i].score = 0;
-        r->members[i].is_eliminated = 0;
-    }
-    
-    // Broadcast game end message to all players (AFTER RESET - Buggy state)
+    // === BROADCAST GAME END (BEFORE RESET) ===
     for (int i = 0; i < r->player_count; i++) {
         if (r->members[i].socket_fd > 0) {
             char msg[128];
@@ -172,6 +189,58 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
         }
     }
+    
+    // === UPDATE WIN STATS (After Broadcast, Before Reset) ===
+    if (r->player_count > 1 && r->game_mode != 0) {
+        int final_winner_id = 0;
+        
+        // MODE 1: ELIMINATION (Last survivor wins)
+        // If multiple survivors (game end naturally), highest score wins.
+        if (r->game_mode == MODE_ELIMINATION) {
+             int survivors_count = 0;
+             int max_survivor_score = -1;
+             
+             for (int i = 0; i < r->player_count; i++) {
+                 if (!r->members[i].is_eliminated) {
+                     survivors_count++;
+                     if (r->members[i].score > max_survivor_score) {
+                         max_survivor_score = r->members[i].score;
+                         final_winner_id = r->members[i].user_id;
+                     }
+                 }
+             }
+             // If nobody survived, fallback to max_score (winner_id calculated earlier)
+             if (survivors_count == 0) final_winner_id = winner_id; 
+        } 
+        // MODE 2: SPEED ATTACK (Highest score wins)
+        else if (r->game_mode == MODE_SCORE_ATTACK) {
+            final_winner_id = winner_id; // Already calculated (max score)
+        }
+        
+        // Update DB
+        if (final_winner_id != 0) {
+            update_user_win(db, final_winner_id);
+            printf("[DB] Updated total_win for user ID %d\n", final_winner_id);
+        }
+        
+        // === SAVE PLAYER STATS FOR ALL PLAYERS ===
+        for (int i = 0; i < r->player_count; i++) {
+            int player_score = r->members[i].score;
+            int player_user_id = r->members[i].user_id;
+            
+            // Save to user_stats with correct game_id
+            save_player_stat(db, player_user_id, r->game_id, player_score, 0);
+            
+            // Update cumulative total_score
+            update_user_score(db, player_user_id, player_score);
+            
+            printf("[DB] Saved stats for user %d: score=%d, game_id=%d\n", 
+                   player_user_id, player_score, r->game_id);
+        }
+    }
+
+    // === RESET ROOM FOR REPLAY ===
+    reset_room_for_replay(r);
 }
 
 // Check if user is already online

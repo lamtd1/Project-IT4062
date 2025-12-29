@@ -670,22 +670,31 @@ int room_handle_answer_elimination(int user_id, char *answer, char *result_msg) 
     } else {
         // Sai: Bị loại khỏi phòng (GIỮ NGUYÊN ĐIỂM HIỆN TẠI)
         int final_score = r->members[idx].score;
-        int user_id = r->members[idx].user_id;
         
         printf("[MODE1] Player %s eliminated with score %d\n", r->members[idx].username, final_score);
         
-        // === SAVE TO DATABASE ===
-        // 1. Save to user_stats (use room_id as temp game_id)
-        save_player_stat(global_db, user_id, r->id, final_score, 0); // rank will be updated later
-        
-        // 2. Update total_score in users table (cumulative)
-        update_user_score(global_db, user_id, final_score);
-        
-        printf("[DB] Saved player %d score: %d to database\n", user_id, final_score);
+        // Stats will be saved in broadcast_end_game with correct game_id
         
         sprintf(result_msg, "SAI ROI! Ban da bi loai. Tong: %d|eliminated:1|wrong_answer:0", final_score);
         r->members[idx].is_eliminated = 1;
         broadcast_scores(r->id);
+        
+        // === CHECK IF ONLY 1 PLAYER REMAINS (AUTO-WIN) ===
+        int survivors_count = 0;
+        int last_survivor_idx = -1;
+        for (int i = 0; i < r->player_count; i++) {
+            if (!r->members[i].is_eliminated) {
+                survivors_count++;
+                last_survivor_idx = i;
+            }
+        }
+        
+        // If only 1 survivor left, end game immediately
+        if (survivors_count == 1 && last_survivor_idx != -1) {
+            printf("[MODE1] Only 1 survivor left (%s) - Auto-ending game\n", r->members[last_survivor_idx].username);
+            broadcast_end_game(r->id, global_db);
+        }
+        
         return 2; // Bị loại
     }
 }
@@ -845,21 +854,34 @@ int room_walk_away(int user_id, char *result_msg) {
     r->members[idx].is_eliminated = 1; // Đánh dấu không chơi nữa
     
     int final_score = r->members[idx].score;
-    int user_id_val = r->members[idx].user_id;
-
-    // === SAVE TO DATABASE (WALK AWAY) ===
-    // 1. Save to user_stats (use room_id as temp game_id)
-    save_player_stat(global_db, user_id_val, r->id, final_score, 0); 
     
-    // 2. Update total_score in users table (cumulative)
-    update_user_score(global_db, user_id_val, final_score);
-    
-    printf("[DB] Saved player %d score (Walk Away): %d to database\n", user_id_val, final_score);
+    // Stats will be saved in broadcast_end_game with correct game_id
 
     sprintf(result_msg, "Ban da dung cuoc choi. Tong tien thuong: %d", final_score);
     
     // Broadcast score update one last time
     broadcast_scores(r->id);
+    
+    // === CHECK IF GAME SHOULD END ===
+    int survivors_count = 0;
+    int last_survivor_idx = -1;
+    for (int i = 0; i < r->player_count; i++) {
+        if (!r->members[i].is_eliminated) {
+            survivors_count++;
+            last_survivor_idx = i;
+        }
+    }
+    
+    // MODE 1 (Elimination): If only 1 survivor left, they win
+    if (r->game_mode == MODE_ELIMINATION && survivors_count == 1 && last_survivor_idx != -1) {
+        printf("[WALK_AWAY] Mode 1: Only 1 survivor left (%s) - Auto-ending game\n", r->members[last_survivor_idx].username);
+        broadcast_end_game(r->id, global_db);
+    }
+    // MODE 2 (Score Attack): If ALL players walked away, end game and find winner by score
+    else if (r->game_mode == MODE_SCORE_ATTACK && survivors_count == 0) {
+        printf("[WALK_AWAY] Mode 2: All players walked away - Ending game\n");
+        broadcast_end_game(r->id, global_db);
+    }
     
     return 1;
 }

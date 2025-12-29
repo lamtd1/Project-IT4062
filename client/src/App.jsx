@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 // Import components
 import RoomListPage from './components/RoomListPage'; // Unused in previous App.jsx? Kept for safety if standard imports
@@ -17,7 +17,7 @@ import RegisterPage from './components/RegisterPage';
 import HomePage from './components/HomePage';
 import GameUI from './components/GameUI';
 import AdminPage from './components/AdminPage';
-import { Button } from "./components/ui/button";
+import GameHistory from './components/GameHistory';
 
 const GameContent = () => {
   const { state, actions, socket } = useGameLogic();
@@ -76,7 +76,9 @@ const GameContent = () => {
         <Route path="/home" element={
           <HomePage
             username={username}
+            userId={state.userId}
             score={score}
+            socket={socket}
             onLogout={handleLogout}
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
@@ -93,6 +95,13 @@ const GameContent = () => {
             onGetAllUsers={actions.handleGetAllUsers}
             onDeleteUser={actions.handleDeleteUser}
           />
+        } />
+        <Route path="/game-history" element={
+          state.gameState === 'LOGIN' ? (
+            <Navigate to="/" replace />
+          ) : (
+            <GameHistory userId={state.userId} />
+          )
         } />
         <Route path="/room" element={
           gameStatus === 'LOBBY' ? (

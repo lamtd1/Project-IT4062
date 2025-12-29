@@ -104,15 +104,18 @@ void get_questions(sqlite3* db, int difficulty, int limit) {
     sqlite3_exec(db, sql, callback, 0, NULL);
 }
 
-void save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *log) {
+int save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *log) {
     char sql[512];
     char *err = 0;
     sprintf(sql, "INSERT INTO game_history (room_name, winner_id, game_mode, log_data) VALUES ('%s', %d, %d, '%s');", room, winner_id, game_mode, log);
     if (sqlite3_exec(db, sql, 0, 0, &err) == SQLITE_OK) {
-        printf("Đã lưu lịch sử trận đấu.\n");
+        int game_id = (int)sqlite3_last_insert_rowid(db);
+        printf("Đã lưu lịch sử trận đấu. Game ID: %d\n", game_id);
+        return game_id;
     } else {
         printf("Lỗi lưu lịch sử: %s\n", err);
         sqlite3_free(err);
+        return 0; // Error
     }
 }
 
@@ -273,5 +276,116 @@ void get_user_detail(sqlite3 *db, int user_id, char *buffer) {
         sprintf(buffer, "%d:%s:%d:%d", id, username, total_win, total_score);
     }
 
+    sqlite3_finalize(stmt);
+}
+
+void update_user_win(sqlite3 *db, int id) {
+    char sql[256];
+    char *err = 0;
+    sprintf(sql, "UPDATE users SET total_win = total_win + 1 WHERE id = %d;", id);
+    if (sqlite3_exec(db, sql, 0, 0, &err) != SQLITE_OK) {
+        printf("Error updating win count: %s\n", err);
+        sqlite3_free(err);
+    } else {
+        printf("Updated total_win for user %d\n", id);
+    }
+}
+
+// Get user's game history for replay feature
+void get_user_game_history(sqlite3 *db, int user_id, char *result_buffer, size_t buffer_size) {
+    result_buffer[0] = '\0'; // Initialize empty
+    
+    const char *sql = 
+        "SELECT gh.id, gh.room_name, gh.winner_id, gh.played_at, "
+        "       gh.game_mode, gh.log_data, us.score_achieved, us.rank "
+        "FROM game_history gh "
+        "JOIN user_stats us ON gh.id = us.game_id "
+        "WHERE us.user_id = ? "
+        "ORDER BY gh.played_at DESC "
+        "LIMIT 20";
+    
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        printf("Error preparing game history query: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+    
+    sqlite3_bind_int(stmt, 1, user_id);
+    
+    char temp[512];
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int game_id = sqlite3_column_int(stmt, 0);
+        const char *room_name = (const char *)sqlite3_column_text(stmt, 1);
+        int winner_id = sqlite3_column_int(stmt, 2);
+        const char *played_at = (const char *)sqlite3_column_text(stmt, 3);
+        int game_mode = sqlite3_column_int(stmt, 4);
+        const char *log_data = (const char *)sqlite3_column_text(stmt, 5);
+        int score = sqlite3_column_int(stmt, 6);
+        int rank = sqlite3_column_int(stmt, 7);
+        
+        // Format: game_id|room_name|winner_id|timestamp|mode|score|rank|log_data;
+        snprintf(temp, sizeof(temp), "%d|%s|%d|%s|%d|%d|%d|%s;",
+                 game_id, room_name ? room_name : "", winner_id,
+                 played_at ? played_at : "", game_mode, score, rank,
+                 log_data ? log_data : "");
+        
+        // Append to result buffer if there's space
+        if (strlen(result_buffer) + strlen(temp) < buffer_size - 1) {
+            strcat(result_buffer, temp);
+        } else {
+            break; // Buffer full
+        }
+    }
+    
+    sqlite3_finalize(stmt);
+    
+    // Remove trailing semicolon
+    size_t len = strlen(result_buffer);
+    if (len > 0 && result_buffer[len - 1] == ';') {
+        result_buffer[len - 1] = '\0';
+    }
+}
+
+// Get questions by comma-separated IDs for replay
+void get_questions_by_ids(sqlite3 *db, const char *ids, char *result_buffer, size_t buffer_size) {
+    result_buffer[0] = '\0';
+    
+    char sql[512];
+    snprintf(sql, sizeof(sql), 
+        "SELECT id,content,answer_a,answer_b,answer_c,answer_d,correct_answer "
+        "FROM questions WHERE id IN (%s)", ids);
+    
+    sqlite3_stmt *stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        printf("[DB] Error preparing questions query: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+    
+    char temp[1024];
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        const char *content = (const char *)sqlite3_column_text(stmt, 1);
+        const char *ans_a = (const char *)sqlite3_column_text(stmt, 2);
+        const char *ans_b = (const char *)sqlite3_column_text(stmt, 3);
+        const char *ans_c = (const char *)sqlite3_column_text(stmt, 4);
+        const char *ans_d = (const char *)sqlite3_column_text(stmt, 5);
+        const char *correct = (const char *)sqlite3_column_text(stmt, 6);
+        
+        snprintf(temp, sizeof(temp), "%d|%s|%s|%s|%s|%s|%s;",
+                 id, 
+                 content ? content : "",
+                 ans_a ? ans_a : "",
+                 ans_b ? ans_b : "",
+                 ans_c ? ans_c : "",
+                 ans_d ? ans_d : "",
+                 correct ? correct : "");
+        
+        if (strlen(result_buffer) + strlen(temp) < buffer_size - 1) {
+            strcat(result_buffer, temp);
+        } else {
+            break;
+        }
+    }
+    
     sqlite3_finalize(stmt);
 }

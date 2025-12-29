@@ -1,40 +1,35 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/card";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { cn } from "../lib/utils";
 
 const CreateRoomPanel = ({ onCreate }) => {
     const [name, setName] = useState("");
     const [mode, setMode] = useState("1"); // Default Elimination
 
     return (
-        <Card className="w-full max-w-md mx-auto mt-0 shadow-lg border-zinc-200 bg-white">
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl flex items-center gap-2 text-zinc-900">
-                        <span className="text-2xl">Tạo phòng mới</span>
-                    </CardTitle>
+        <div className="w-full max-w-md mx-auto mt-0 shadow-lg border-2 border-gray-200 bg-white rounded-xl">
+            <div className="p-6">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xl font-semibold text-black">
+                        <span className="text-2xl">🎮 Tạo phòng mới</span>
+                    </h3>
                 </div>
-                <CardDescription className="text-zinc-500">
-                    Chọn chế độ và đặt tên để bắt đầu.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+                <p className="text-gray-500 text-sm">Chọn chế độ và đặt tên để bắt đầu.</p>
+            </div>
+            <div className="space-y-6 px-6 pb-6">
                 {/* Room Name */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700">Tên phòng</label>
-                    <Input
+                    <label className="text-sm font-medium text-gray-700">Tên phòng</label>
+                    <input
+                        type="text"
                         placeholder="Đặt tên phòng..."
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="bg-white border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-500"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-white text-black placeholder:text-gray-400 focus:outline-none focus:border-indigo-500 transition"
                     />
                 </div>
 
                 {/* Game Mode */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700">Chế độ chơi</label>
+                    <label className="text-sm font-medium text-gray-700">Chế độ chơi</label>
                     <div className="grid grid-cols-3 gap-3">
                         {[
                             { id: "0", label: "Luyện tập", icon: "👤" },
@@ -44,12 +39,10 @@ const CreateRoomPanel = ({ onCreate }) => {
                             <div
                                 key={m.id}
                                 onClick={() => setMode(m.id)}
-                                className={cn(
-                                    "cursor-pointer rounded-lg border p-3 flex flex-col items-center justify-center gap-2 transition-all duration-200",
-                                    mode === m.id
-                                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm ring-1 ring-indigo-200"
-                                        : "bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300"
-                                )}
+                                className={`cursor-pointer rounded-lg border-2 p-3 flex flex-col items-center justify-center gap-2 transition-all duration-200 ${mode === m.id
+                                        ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm ring-2 ring-indigo-200"
+                                        : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50 hover:border-gray-400"
+                                    }`}
                             >
                                 <span className="text-lg">{m.icon}</span>
                                 <span className="text-xs font-bold">{m.label}</span>
@@ -57,17 +50,17 @@ const CreateRoomPanel = ({ onCreate }) => {
                         ))}
                     </div>
                 </div>
-            </CardContent>
-            <CardFooter>
-                <Button
-                    className="w-full bg-zinc-900 text-white hover:bg-zinc-800 font-bold py-6 text-md shadow-md transition-all active:scale-[0.98]"
+            </div>
+            <div className="p-6 pt-0">
+                <button
                     onClick={() => name && onCreate(`${name}:${mode}`)}
                     disabled={!name}
+                    className="w-full bg-black text-white hover:bg-gray-800 font-bold py-4 text-md rounded-lg shadow-md transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-black"
                 >
-                    Tạo phòng ngay
-                </Button>
-            </CardFooter>
-        </Card>
+                    🚀 Tạo phòng ngay
+                </button>
+            </div>
+        </div>
     );
 }
 

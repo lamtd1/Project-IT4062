@@ -1,6 +1,4 @@
 import React, { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
 
 const AdminPage = ({
     username,
@@ -10,18 +8,12 @@ const AdminPage = ({
     onDeleteUser,
 }) => {
     useEffect(() => {
-        // Load users immediately on mount
         onGetAllUsers();
-
-        // Set up auto-refresh every 5 seconds
         const interval = setInterval(() => {
             onGetAllUsers();
         }, 5000);
-
-        // Cleanup interval on unmount
         return () => clearInterval(interval);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Empty array = run once on mount only
+    }, []);
 
     const handleDelete = (userId, username) => {
         if (window.confirm(`Bạn có chắc muốn xóa tài khoản "${username}"?`)) {
@@ -36,32 +28,30 @@ const AdminPage = ({
                 <div className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                            Admin Dashboard
+                            🔧 Admin Dashboard
                         </h1>
                         <p className="text-gray-600">
                             Chào mừng, <span className="font-semibold text-indigo-600">{username}</span>
                             <span className="ml-3 text-xs text-gray-500">• Tự động cập nhật mỗi 5 giây</span>
                         </p>
                     </div>
-                    <Button
-                        variant="outline"
+                    <button
                         onClick={onLogout}
-                        className="bg-white hover:bg-gray-100"
+                        className="px-4 py-2 bg-white hover:bg-gray-100 border-2 border-gray-300 rounded-lg transition"
                     >
-                        Đăng xuất
-                    </Button>
+                        Đăng xuấtđã</button>
                 </div>
 
                 {/* User Management Card */}
-                <Card className="shadow-2xl border-indigo-100">
-                    <CardHeader className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
-                        <CardTitle className="text-2xl flex items-center gap-3">
+                <div className="shadow-2xl border-2 border-indigo-200 rounded-xl bg-white">
+                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white p-6 rounded-t-xl">
+                        <h2 className="text-2xl flex items-center gap-3 font-semibold">
                             <span>👥</span>
                             <span>Quản Lý Người Dùng</span>
                             <span className="text-sm font-normal opacity-90">({allUsers.length} người dùng)</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
+                        </h2>
+                    </div>
+                    <div className="p-0">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                                 <thead className="bg-gray-50 border-b-2 border-gray-200">
@@ -116,24 +106,21 @@ const AdminPage = ({
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span
                                                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${user.is_online
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-gray-100 text-gray-800'
+                                                                ? 'bg-green-100 text-green-800'
+                                                                : 'bg-gray-100 text-gray-800'
                                                             }`}
                                                     >
-                                                        <span className={`w-2 h-2 rounded-full mr-2 ${user.is_online ? 'bg-green-500' : 'bg-gray-400'
-                                                            }`}></span>
+                                                        <span className={`w-2 h-2 rounded-full mr-2 ${user.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>
                                                         {user.is_online ? 'Online' : 'Offline'}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="destructive"
+                                                    <button
                                                         onClick={() => handleDelete(user.id, user.username)}
-                                                        className="bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
+                                                        className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-600 border-2 border-red-200 rounded-lg transition"
                                                     >
                                                         Xóa
-                                                    </Button>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))
@@ -141,8 +128,8 @@ const AdminPage = ({
                                 </tbody>
                             </table>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
             </div>
         </div>
     );

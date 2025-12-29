@@ -326,16 +326,47 @@ int main(){
                         }
                         
                         case 0x60: { // MSG_REFRESH_USER_INFO
-                            // Get updated score from database for current user
-                            int user_id = sessions[i].user_id;
-                            int updated_score = get_user_score(db, user_id);
+                            // Send updated user info (score) back to client
+                            int user_score = get_user_score(db, sessions[i].user_id);
+                            char response[64];
+                            response[0] = MSG_USER_INFO_UPDATE;
+                            sprintf(response + 1, "%d", user_score);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[USER_INFO] Sent updated score %d to user %d\n", user_score, sessions[i].user_id);
+                            break;
+                        }
+                        
+                        case 0x70: { // MSG_GET_GAME_HISTORY
+                            char history_buffer[8192];
+                            printf("[GAME_HISTORY] Querying history for user_id=%d\n", sessions[i].user_id);
+                            get_user_game_history(db, sessions[i].user_id, history_buffer, sizeof(history_buffer));
                             
-                            char resp[32];
-                            resp[0] = 0x61; // MSG_USER_INFO_UPDATE
-                            sprintf(resp + 1, "%d", updated_score);
-                            send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
+                            printf("[GAME_HISTORY] Query result: %lu bytes\n", strlen(history_buffer));
+                            if (strlen(history_buffer) > 0) {
+                                printf("[GAME_HISTORY] Sample data: %.200s...\n", history_buffer);
+                            } else {
+                                printf("[GAME_HISTORY] WARNING: Empty result for user_id=%d\n", sessions[i].user_id);
+                            }
                             
-                            printf("[USER_INFO] Sent updated score %d to user %d\n", updated_score, user_id);
+                            char response[8300];
+                            response[0] = MSG_GAME_HISTORY_RESPONSE;
+                            strcpy(response + 1, history_buffer);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[GAME_HISTORY] Sent history response (%lu bytes total)\n", 
+                                   1 + strlen(history_buffer));
+                            break;
+                        }
+                        
+                        case 0x72: { // MSG_GET_QUESTIONS_BY_IDS
+                            const char *ids_str = buffer + 1;
+                            char questions_buffer[8192];
+                            get_questions_by_ids(db, ids_str, questions_buffer, sizeof(questions_buffer));
+                            
+                            char response[8300];
+                            response[0] = MSG_QUESTIONS_RESPONSE;
+                            strcpy(response + 1, questions_buffer);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[QUESTIONS] Sent %lu bytes for IDs: %s\n", strlen(questions_buffer), ids_str);
                             break;
                         }
 
@@ -501,18 +532,8 @@ int main(){
                                 }
                             }
                             else if (answer_result == 2) {
-                                // Player eliminated
+                                // Player eliminated (stays in room, marked as is_eliminated)
                                 printf("[GAME] Room %d - Player %s eliminated\n", r->id, sessions[i].username);
-                                printf("[DEBUG] Game mode = %d, MODE_ELIMINATION = %d\n", r->game_mode, MODE_ELIMINATION);
-                                
-                                // Mode 1: Remove player from room
-                                if (r->game_mode == MODE_ELIMINATION) {
-                                    printf("[DEBUG] Calling room_remove_player for user %d\n", sessions[i].user_id);
-                                    room_remove_player(r->id, sessions[i].user_id);
-                                    // Note: r pointer may be invalid after removal if it was last player
-                                    r = room_get_by_id(r->id); // Re-get pointer
-                                    printf("[DEBUG] After removal, room has %d players\n", r ? r->player_count : 0);
-                                }
                                 
                                 // Check if ALL players eliminated
                                 if (r && room_all_eliminated(r->id)) {

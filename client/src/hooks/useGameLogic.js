@@ -8,11 +8,21 @@ const socket = io('http://localhost:4000');
 export const useGameLogic = () => {
     const navigate = useNavigate();
 
-    const [username, setUsername] = useState('');
+    // Initialize from localStorage if available
+    const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
     const [password, setPassword] = useState('');
-    const [userId, setUserId] = useState(null);
-    const [score, setScore] = useState(0);
-    const [userRole, setUserRole] = useState(1); // 0=admin, 1=user
+    const [userId, setUserId] = useState(() => {
+        const saved = localStorage.getItem('userId');
+        return saved ? parseInt(saved) : null;
+    });
+    const [score, setScore] = useState(() => {
+        const saved = localStorage.getItem('score');
+        return saved ? parseInt(saved) : 0;
+    });
+    const [userRole, setUserRole] = useState(() => {
+        const saved = localStorage.getItem('userRole');
+        return saved ? parseInt(saved) : 1;
+    });
     const [status, setStatus] = useState({ msg: '', type: '' });
 
     // Game State
@@ -70,9 +80,20 @@ export const useGameLogic = () => {
                 const payload = textDecoder.decode(view.slice(1));
                 const [idStr, scoreStr, roleStr] = payload.split(':');
                 const role = parseInt(roleStr || '1');
-                setUserId(parseInt(idStr));
-                setScore(parseInt(scoreStr || '0'));
+                const uid = parseInt(idStr);
+                const sc = parseInt(scoreStr || '0');
+
+                // Save to state
+                setUserId(uid);
+                setScore(sc);
                 setUserRole(role);
+
+                // Persist to localStorage
+                localStorage.setItem('userId', uid.toString());
+                localStorage.setItem('username', username);
+                localStorage.setItem('score', sc.toString());
+                localStorage.setItem('userRole', role.toString());
+
                 setStatus({ msg: "Đăng nhập thành công!", type: 'success' });
                 setTimeout(() => navigate(role === 0 ? '/admin' : '/home'), 500);
             }
@@ -379,9 +400,18 @@ export const useGameLogic = () => {
         const packet = new Uint8Array(1);
         packet[0] = OPS.LOGOUT;
         socket.emit("client_to_server", packet);
-        setUsername('');
+
+        // Clear localStorage
+        localStorage.removeItem('userId');
+        localStorage.removeItem('username');
+        localStorage.removeItem('score');
+        localStorage.removeItem('userRole');
+
+        // Reset state
         setUserId(null);
+        setUsername('');
         setScore(0);
+        setUserRole(1); // Assuming 1 is the default user role
         setGameStatus('LOBBY');
         setRoomInfo({ id: null, name: '' });
         setRoomMembers([]);
@@ -440,6 +470,19 @@ export const useGameLogic = () => {
         setTimeLeft(0);
         setGameResult('');
         setRenderKey(prev => prev + 1);
+
+        // Request fresh room details from server
+        if (roomInfo.id !== null && roomInfo.id !== undefined) {
+            const textData = `${roomInfo.id}`;
+            const encoder = new TextEncoder();
+            const stringBytes = encoder.encode(textData);
+            const packet = new Uint8Array(1 + stringBytes.length);
+            packet[0] = OPS.GET_ROOM_DETAIL;
+            packet.set(stringBytes, 1);
+            socket.emit("client_to_server", packet);
+            console.log('[REPLAY] Requested fresh room details');
+        }
+
         console.log('[REPLAY] State reset to LOBBY');
     };
 

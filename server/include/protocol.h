@@ -55,6 +55,16 @@
 #define MSG_GET_USER_DETAIL     0x54
 #define MSG_USER_DETAIL_RESULT  0x55
 
+// User info refresh (for header score update)
+#define MSG_REFRESH_USER_INFO   0x60
+#define MSG_USER_INFO_UPDATE    0x61
+
+// Game History
+#define MSG_GET_GAME_HISTORY        0x70
+#define MSG_GAME_HISTORY_RESPONSE   0x71
+#define MSG_GET_QUESTIONS_BY_IDS    0x72
+#define MSG_QUESTIONS_RESPONSE      0x73
+
 // Cấu trúc ngừoi dùng trong gói tin
 typedef struct {
     char username[50];
