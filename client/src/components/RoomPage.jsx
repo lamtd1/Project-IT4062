@@ -82,15 +82,16 @@ const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [],
                             <div className="text-center w-full max-w-sm relative z-10">
                                 <Button
                                     onClick={onStart}
-                                    disabled={members.length < 1}
+                                    disabled={!isMode0 && members.length < 2}
                                     size="lg"
-                                    className={`w-full py-8 text-xl font-bold transition-all ${members.length < 1 ? 'opacity-50' : 'hover:scale-105 shadow-xl bg-indigo-600 hover:bg-indigo-700'
-                                        }`}
+                                    className={`w-full py-8 text-xl font-bold transition-all ${
+                                        (!isMode0 && members.length < 2) ? 'opacity-50' : 'hover:scale-105 shadow-xl bg-indigo-600 hover:bg-indigo-700'
+                                    }`}
                                 >
-                                    {members.length < 1 ? 'Chờ người chơi...' : 'BẮT ĐẦU GAME 🚀'}
+                                    {(!isMode0 && members.length < 2) ? 'Chờ người chơi...' : 'BẮT ĐẦU GAME 🚀'}
                                 </Button>
                                 <p className="mt-4 text-zinc-500 text-sm font-medium">
-                                    {members.length < 1 ? "Cần ít nhất 1 người chơi để bắt đầu" : "Đã sẵn sàng!"}
+                                    {(!isMode0 && members.length < 2) ? "Cần ít nhất 2 người chơi để bắt đầu" : "Đã sẵn sàng!"}
                                 </p>
                             </div>
                         ) : (

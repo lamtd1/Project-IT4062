@@ -23,7 +23,12 @@ const GameUI = ({ currentQuestion, timeLeft, handleAnswer, socket }) => (
                         <Button
                             key={char}
                             onClick={() => handleAnswer(char)}
-                            className="h-auto p-6 text-lg justify-start gap-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all group"
+                            disabled={currentQuestion?.canAnswer === false}
+                            className={`h-auto p-6 text-lg justify-start gap-4 transition-all group ${
+                                currentQuestion?.canAnswer === false 
+                                    ? 'bg-zinc-950 border-zinc-900 opacity-50 cursor-not-allowed' 
+                                    : 'bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700'
+                            }`}
                         >
                             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 font-bold group-hover:bg-zinc-700 group-hover:text-white transition-colors">
                                 {char}

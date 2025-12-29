@@ -5,6 +5,33 @@ import { OPS } from '../lib/ops';
 
 const socket = io('http://localhost:4000');
 
+// Toast notification helper
+const showToast = (message, type = 'info', duration = 3000) => {
+    const colors = {
+        success: '#10B981',
+        error: '#DC2626',
+        info: '#3B82F6',
+        warning: '#F59E0B'
+    };
+    
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 9999;
+        background: ${colors[type] || colors.info};
+        color: white; padding: 16px 24px; border-radius: 12px;
+        font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        max-width: 400px; white-space: pre-line;
+        animation: slideIn 0.3s ease-out;
+    `;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+};
+
 export const useGameLogic = () => {
     const navigate = useNavigate();
 
@@ -97,7 +124,7 @@ export const useGameLogic = () => {
                 } else setStatus({ msg: "Vào phòng thất bại!", type: 'error' });
             }
             else if (opcode === OPS.LEAVE_ROOM) {
-                alert("Phòng đã bị hủy do chủ phòng thoát!");
+                showToast("Phòng đã bị hủy do chủ phòng thoát!", 'warning');
                 navigate('/home');
                 setRoomMembers([]);
                 setRoomInfo({});
@@ -125,18 +152,57 @@ export const useGameLogic = () => {
             else if (opcode === 0x23) { // MSG_ANSWER_RESULT
                 const payload = textDecoder.decode(view.slice(1));
                 console.log('[ANSWER RESULT]', payload);
+                
+                // Parse: "message|eliminated:0/1"
+                const parts = payload.split('|eliminated:');
+                const message = parts[0];
+                const isEliminated = parts[1] === '1';
+                
+                // Show auto-dismiss notification
+                const isWrong = message.includes('SAI');
+                showToast(message, isWrong ? 'error' : 'success');
+                
+                // If eliminated or answered wrong → disable answer buttons
+                if (isEliminated || isWrong) {
+                    setCurrentQuestion(prev => prev ? { ...prev, canAnswer: false } : null);
+                }
             }
             else if (opcode === 0x26) { // MSG_GAME_END
                 const payload = textDecoder.decode(view.slice(1));
+                console.log('[GAME END] Full message:', payload);
+                console.log('[GAME END] Setting gameStatus to FINISHED');
                 setGameStatus('FINISHED');
-                setGameResult(payload);
+                console.log('[GAME END] Setting gameResult:', payload);
+                setGameResult(payload); // This will show the win/lose message
+                console.log('[GAME END] State updated');
             }
             else if (opcode === 0x2B) { // MSG_WALK_AWAY
                 const msg = textDecoder.decode(view.slice(1));
-                alert(msg);
-            } else if (opcode === 0x2D) { // MSG_HELP_RESULT
+                showToast(msg, 'info');
+            }
+            else if (opcode === 0x50) { // MSG_SCORES_UPDATE
+                const payload = textDecoder.decode(view.slice(1));
+                console.log('[SCORES UPDATE]', payload);
+                
+                // Parse "user1:score1,user2:score2,..."
+                const scores = payload.split(',').filter(s => s).map(item => {
+                    const [name, score] = item.split(':');
+                    return { username: name.trim(), score: parseInt(score) || 0 };
+                });
+                
+                // Update room members with new scores
+                setRoomMembers(prev => prev.map(member => {
+                    const updated = scores.find(s => s.username === member.username);
+                    return updated ? { ...member, score: updated.score } : member;
+                }));
+                
+                // Show scores toast
+                const scoresText = scores.map(s => `${s.username}: ${s.score}`).join('\n');
+                showToast(`Scores:\n${scoresText}`, 'info', 4000);
+            }
+            else if (opcode === 0x2D) { // MSG_HELP_RESULT
                 const msg = textDecoder.decode(view.slice(1));
-                alert(`Tư vấn trợ giúp:\n${msg}`);
+                showToast(`Tư vấn trợ giúp:\n${msg}`, 'info', 4000);
             }
             else if (opcode === OPS.ROOM_LIST) {
                 const listStr = textDecoder.decode(view.slice(1));

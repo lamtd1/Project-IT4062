@@ -35,6 +35,7 @@
 #define MSG_WALK_AWAY 0x2B
 #define MSG_USE_HELP 0x2C
 #define MSG_HELP_RESULT 0x2D
+#define MSG_SCORES_UPDATE 0x50  // Server → Client: Live scores after each question
 
 
 #define MSG_GET_ONLINE_USERS 0x40

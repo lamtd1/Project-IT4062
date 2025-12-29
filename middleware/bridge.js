@@ -51,10 +51,10 @@ io.on('connection', (webSocket) => {
     tcpSocket.on('data', (data) => {
         buffer = Buffer.concat([buffer, data]);
 
-        // Split by newline delimiter
+        // Split by newline delimiter (only at END of message)
         let delimiterIndex;
         while ((delimiterIndex = buffer.indexOf('\n')) !== -1) {
-            // Extract message (without delimiter)
+            // Extract FULL message (including internal newlines if any)
             const message = buffer.slice(0, delimiterIndex);
             buffer = buffer.slice(delimiterIndex + 1);
 
@@ -63,10 +63,11 @@ io.on('connection', (webSocket) => {
                 const payload = message.slice(1);
                 log_middleware("------ MESSAGE PARSED ------");
                 log_middleware("Opcode: 0x" + opcode.toString(16).toUpperCase());
-                log_middleware("Payload: " + payload.toString());
+                log_middleware("Payload length: " + payload.length + " bytes");
+                log_middleware("Payload preview: " + payload.toString().substring(0, 100));
                 log_middleware("----------------------------");
 
-                // Emit to WebSocket
+                // Emit FULL message to WebSocket (preserving all newlines in payload)
                 webSocket.emit('server_to_client', message);
             }
         }

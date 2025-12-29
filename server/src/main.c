@@ -210,21 +210,29 @@ int main(){
             break;
         }
 
+
         // --- GAME LOOP TIMER UPDATE ---
-        // NOTE: Disabled for single-player classic mode
-        // Questions now advance immediately when user answers correctly
-        // This timer logic can be re-enabled for multiplayer modes
-        /*
+        // Enable for Mode 1 & 2 (multiplayer)
         for (int r = 0; r < MAX_ROOMS; r++) {
-             // room_update_timer trả về: 0 (ko đổi/ko playing), 1 (Next Q), 2 (End)
-             int status = room_update_timer(r);
-             if (status == 1) {
-                 broadcast_question(r);
-             } else if (status == 2) {
-                 broadcast_end_game(r, db);
+             Room *room = room_get_by_id(r);
+             if (room) {
+                 // Check if game just finished → broadcast end (ONCE)
+                 if (room->status == ROOM_FINISHED && room->game_mode != MODE_CLASSIC && !room->end_broadcasted) {
+                     broadcast_end_game(r, db);
+                     room->end_broadcasted = 1; // Mark as sent
+                 }
+                 // Regular timer update for PLAYING rooms
+                 else if (room->status == ROOM_PLAYING && room->game_mode != MODE_CLASSIC) {
+                     int status = room_update_timer(r);
+                     if (status == 1) {
+                         broadcast_question(r);
+                     } else if (status == 2) {
+                         broadcast_end_game(r, db);
+                         room->end_broadcasted = 1; // Mark as sent
+                     }
+                 }
              }
         }
-        */
         // ------------------------------
 
         // Kiểm tra socket server & kiểm tra cờ POLLIN được bật
@@ -445,10 +453,23 @@ int main(){
                             int answer_result = room_handle_answer(sessions[i].user_id, payload, result_msg);
                             
                             // Gửi lải kết quả: MSG_ANSWER_RESULT (0x23) + MSG string
-                            char resp[300];
+                            char resp[BUFFER_SIZE]; // Use BUFFER_SIZE for consistency
                             resp[0] = MSG_ANSWER_RESULT;
-                            strcpy(resp + 1, result_msg);
-                            send_with_delimiter(sd, resp, 1 + strlen(result_msg));
+                            
+                            // Add elimination flag: "message|eliminated:0/1"
+                            Room *r = room_get_by_user(sessions[i].user_id); // Get room here to check elimination status
+                            int is_eliminated = 0;
+                            if (r) {
+                                for (int j = 0; j < r->player_count; j++) {
+                                    if (r->members[j].user_id == sessions[i].user_id) {
+                                        is_eliminated = r->members[j].is_eliminated;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            sprintf(resp + 1, "%s|eliminated:%d", result_msg, is_eliminated);
+                            send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
                             
                             // Log debug
                             printf("User %s answered %s. Result: %s\n", sessions[i].username, payload, result_msg);

@@ -59,76 +59,98 @@ void broadcast_question(int room_id) {
     printf("Broadcasting Question Level %d to Room %d\n", r->current_question_idx + 1, room_id);
 }
 
-// Helper: Broadcast Game End
-void broadcast_end_game(int room_id, sqlite3 *db) {
+// Helper: Broadcast live scores to all players (Mode 1 & 2)
+void broadcast_scores(int room_id) {
     Room *r = room_get_by_id(room_id);
     if (!r) return;
     
-    // MODE 0 (Classic): KHÔNG cập nhật điểm tích lũy vào DB
-    if (r->game_mode != MODE_CLASSIC) {
-        // Save scores to database for all players (Mode 1 & 2 only)
-        for (int i = 0; i < r->player_count; i++) {
-            if (r->members[i].user_id > 0 && r->members[i].score > 0) {
-                update_user_score(db, r->members[i].user_id, r->members[i].score);
-                printf("[DB] Updated score for user %d: +%d points\n", r->members[i].user_id, r->members[i].score);
-            }
-        }
-    }
-
-    // SAVE HISTORY
-    // Assuming Single Player for now or last winner standing
-    // In multi-player, winner might be determined earlier.
-    // For now, let's just save.
-    // Winner ID: 0 (or find best score)
-    int winner_id = 0;
-    int max_score = -1;
-    for(int i=0; i<r->player_count; i++) {
-        if(r->members[i].score > max_score) {
-            max_score = r->members[i].score;
-            winner_id = r->members[i].user_id;
-        }
-    }
+    char msg[512];
+    msg[0] = MSG_SCORES_UPDATE;
     
-    
-    // TẤT CẢ MODES: Reset về WAITING để cho phép chơi lại
-    r->status = ROOM_WAITING;
-    r->current_question_idx = 0;
-    
-    // Reset states
+    // Format: "username1:score1,username2:score2,..."
+    char payload[500] = "";
     for (int i = 0; i < r->player_count; i++) {
-        r->members[i].score = 0;
-        r->members[i].is_eliminated = 0;
+        char temp[64];
+        sprintf(temp, "%s:%d,", r->members[i].username, r->members[i].score);
+        strcat(payload, temp);
     }
     
-    // MODE 0 (Classic): Reset về WAITING thay vì FINISHED
-    if (r->game_mode == MODE_CLASSIC) {
-        // Gửi thông báo kết thúc
-        for (int i = 0; i < r->player_count; i++) {
-            if (r->members[i].socket_fd > 0) {
-                char msg[128];
-                msg[0] = MSG_GAME_END;
-                sprintf(msg + 1, "Game ket thuc! Diem: %d", max_score);
-                send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
-            }
-        }
-        return; // Không lưu history
-    }
+    // Remove trailing comma
+    int len = strlen(payload);
+    if (len > 0) payload[len - 1] = '\0';
     
-    // Save to DB only if Multiplayer (player_count > 1) AND NOT Practice Mode (0)
-    if (r->player_count > 1 && r->game_mode != 0) {
-        // Log "Multiplayer" logic
-        save_history(db, r->name, winner_id, r->game_mode, r->game_log); 
-    }
+    strcpy(msg + 1, payload);
     
-    // Broadcast game end message to all players
+    // Send to all players
     for (int i = 0; i < r->player_count; i++) {
         if (r->members[i].socket_fd > 0) {
-            char msg[128];
-            msg[0] = MSG_GAME_END;
-            sprintf(msg + 1, "Game Over! Score: %d", r->members[i].score);
             send_with_delimiter(r->members[i].socket_fd, msg, 1 + strlen(msg + 1));
         }
     }
+    
+    printf("[SCORES] Broadcast to Room %d: %s\n", room_id, payload);
+}
+
+// Helper: Broadcast Game End
+void broadcast_end_game(int room_id, sqlite3 *db) {
+    Room *r = room_get_by_id(room_id);
+    if (!r || r->player_count == 0) return;
+    
+    // Find winner (highest score)
+    int winner_idx = 0;
+    int max_score = r->members[0].score;
+    for (int i = 1; i < r->player_count; i++) {
+        if (r->members[i].score > max_score) {
+            max_score = r->members[i].score;
+            winner_idx = i;
+        }
+    }
+    
+    // MODE 0 (Classic): KHÔNG cập nhật điểm tích lũy vào DB
+    // MODE 1 & 2: Only save winner's score to database
+    if (r->game_mode != MODE_CLASSIC) {
+        if (r->members[winner_idx].user_id > 0 && max_score > 0) {
+            update_user_score(db, r->members[winner_idx].user_id, max_score);
+            printf("[DB] Winner %s: +%d points\n", r->members[winner_idx].username, max_score);
+        }
+    }
+    
+    // Build message with all scores
+    char msg[512];
+    sprintf(msg, "=== GAME KET THUC ===\n\nBANG XEP HANG:\n");
+    
+    // List all scores
+    for (int i = 0; i < r->player_count; i++) {
+        char line[100];
+        sprintf(line, "%d. %s: %d diem%s\n", 
+                i + 1, 
+                r->members[i].username, 
+                r->members[i].score,
+                (i == winner_idx) ? " [THANG!]" : "");
+        strcat(msg, line);
+    }
+    
+    printf("[DEBUG] Base message for room %d:\n%s\n", room_id, msg);
+    
+    // Send personalized messages to all players
+    for (int i = 0; i < r->player_count; i++) {
+        char personal_msg[600];
+        sprintf(personal_msg, "%s\n%s", 
+                msg,
+                (i == winner_idx) ? "\nCHUC MUNG! BAN DA CHIEN THANG!" : "\nBAN DA THUA. HAY CO GANG HON!");
+        
+        printf("[DEBUG] Sending to %s: %s\n", r->members[i].username, personal_msg);
+        
+        char resp[650];
+        resp[0] = MSG_GAME_END;
+        strcpy(resp + 1, personal_msg);
+        send_with_delimiter(r->members[i].socket_fd, resp, 1 + strlen(personal_msg));
+    }
+    
+    printf("[GAME] Room %d ended. Winner: %s (%d pts)\n", room_id, r->members[winner_idx].username, max_score);
+    
+    // Keep status as ROOM_FINISHED - don't reset
+    // Client will show Replay/Exit UI
 }
 
 // Check if user is already online

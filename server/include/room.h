@@ -26,9 +26,10 @@ typedef struct {
     char username[50];
     int score;
     int is_host;       // 1: Chủ phòng
-    int is_eliminated; // 1: Đã bị loại
-
-    // --- TRẠNG THÁI TRỢ GIÚP ---
+    int is_eliminated;      // Đã bị loại (Mode 0)
+    int has_answered;       // Đã trả lời câu hiện tại (Mode 1 & 2)
+    
+    // Lifelines (Trợ giúp)
     int help_5050_used;      // 1. 50:50
     int help_audience_used;  // 2. Khán giả
     int help_phone_used;     // 3. Gọi điện thoại

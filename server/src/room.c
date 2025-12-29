@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/room.h"
-
-// --- KHAI BÁO THƯ VIỆN ĐỂ SEND ---
+#include <time.h>
+#include "room.h"
+#include "game.h"
+#include "network.h"  
 #include <sys/socket.h>
 #include <unistd.h>
 #include "../include/protocol.h"
@@ -151,6 +152,7 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
     r->members[idx].is_host = 0; // Không phải host
     r->members[idx].score = 0;
     r->members[idx].is_eliminated = 0;
+    r->members[idx].has_answered = 0;  // Reset answered flag
 
     // Khởi tạo trạng thái trợ giúp
     r->members[idx].help_5050_used = 0;
@@ -230,6 +232,13 @@ int room_leave(int user_id) {
             r->id = -1;
             r->status = ROOM_WAITING;
         }
+        
+        // MODE 1 & 2: Nếu chỉ còn 1 người trong game -> Người đó thắng
+        if (r->status == ROOM_PLAYING && r->game_mode != MODE_CLASSIC && r->player_count == 1) {
+            printf("[ROOM] Only 1 player left in Mode %d. Declaring winner.\n", r->game_mode);
+            r->status = ROOM_FINISHED;
+            // Main loop will detect FINISHED status and call broadcast_end_game
+        }
     }
     
     printf("[ROOM] User %d left room\n", user_id);
@@ -256,11 +265,22 @@ int room_start_game(int room_id, int user_id) {
     
     // KIỂM TRA QUYỀN: Chỉ host (member[0]) mới được start
     if (r->members[0].user_id != user_id) return -1;
-    if (r->player_count < 1) return -2; // Phải có ít nhất 1 người
+    
+    // KIỂM TRA TRẠNG THÁI: Không được start khi đang chơi
+    if (r->status == ROOM_PLAYING) return -3;
+    
+    // KIỂM TRA SỐ NGƯỜI CHƠI
+    if (r->game_mode == MODE_CLASSIC) {
+        if (r->player_count < 1) return -2; // Mode 0: Cần ít nhất 1
+    } else {
+        // Mode 1 & 2: Cần ít nhất 2 người
+        if (r->player_count < 2) return -4;
+    }
 
     // CHUYỂN TRẠNG THÁI
     r->status = ROOM_PLAYING;
     r->current_question_idx = 0; // Bắt đầu từ câu hỏi 0
+    r->end_broadcasted = 0; // Reset broadcast flag
     
     // RESET ĐIỂM & TRẠNG THÁI cho tất cả members
     for(int i=0; i<r->player_count; i++) {
@@ -332,6 +352,40 @@ int room_update_timer(int room_id) {
 
     // Tính thời gian đã trôi qua (giây)
     double elapsed = difftime(time(NULL), r->question_start_time);
+    
+    // MODE 1 & 2: Check if all players answered
+    if (r->game_mode != MODE_CLASSIC) {
+        int active_count = 0;
+        int answered_count = 0;
+        
+        for (int i = 0; i < r->player_count; i++) {
+            if (!r->members[i].is_eliminated) {
+                active_count++;
+                if (r->members[i].has_answered) {
+                    answered_count++;
+                }
+            }
+        }
+        
+        // If all active players answered → advance to next question
+        if (answered_count >= active_count && active_count > 0) {
+            printf("[TIMER] All %d players answered. Advancing...\n", active_count);
+            r->current_question_idx++;
+            r->question_start_time = time(NULL);
+            
+            // Reset answered flags BEFORE checking end
+            for (int i = 0; i < r->player_count; i++) {
+                r->members[i].has_answered = 0;
+            }
+            
+            if (r->current_question_idx >= 15) {
+                r->status = ROOM_FINISHED;
+                printf("[TIMER] Game finished after question 15\n");
+                return 2; // Game end
+            }
+            return 1; // Next question
+        }
+    }
     
     // KIỂM TRA HẾT GIỜ
     if (elapsed > QUESTION_DURATION) {
@@ -550,6 +604,11 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
     // Tính thời gian đã trôi qua
     double elapsed = difftime(time(NULL), r->question_start_time);
     
+    // MARK PLAYER AS ANSWERED (Mode 1 & 2)
+    if (r->game_mode != MODE_CLASSIC) {
+        r->members[idx].has_answered = 1;
+    }
+    
     // KIỂM TRA ĐÁP ÁN qua module game.c
     // calculate_score() return: 1 (đúng), -1 (sai), 0 (timeout)
     int res = calculate_score(q, answer, elapsed);
@@ -581,6 +640,35 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
             
             // Cộng dồn điểm
             r->members[idx].score += prize;
+        } else if (r->game_mode == MODE_ELIMINATION) {
+            // MODE 1: Elimination - Time-based scoring
+            int time_bonus = (30 - (int)elapsed);
+            if (time_bonus < 0) time_bonus = 0;
+            prize = 100 + time_bonus * 10;
+            
+            // Cộng dồn điểm
+            r->members[idx].score += prize;
+            
+            // ADVANCE IMMEDIATELY on first correct answer
+            r->current_question_idx++;
+            r->question_start_time = time(NULL);
+            
+            // Broadcast scores
+            broadcast_scores(r->id);
+            
+            sprintf(result_msg, "CHINH XAC! +%d diem. Tong: %d", prize, r->members[idx].score);
+            
+            // Check if game finished AFTER advancing
+            if (r->current_question_idx >= 15) {
+                r->status = ROOM_FINISHED;
+                printf("[GAME] Mode 1 finished after question 15\n");
+                // Don't broadcast question, game will end via timer
+                return 1;
+            } else {
+                broadcast_question(r->id);
+            }
+            
+            return 1; // Đã advance
         } else {
             // MODE 0 & 1: Practice/Elimination - Tiền thưởng cố định
             prize = get_prize_for_level(current_level);
@@ -593,18 +681,30 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
                 current_level, r->members[idx].score);
         
         return 1; // Trả lời đúng
-    } 
+    }
     else {
         // ❌ SAI HOẶC HẾT GIỜ
         
-        if (r->game_mode == 2) {
+        if (r->game_mode == MODE_SCORE_ATTACK) {
              // MODE 2: Score Attack
              // Không bị loại, không mất điểm, tiếp tục chơi
              sprintf(result_msg, "SAI ROI! Ban khong duoc diem cau nay.");
+             
+             // Broadcast scores để hiển thị điểm
+             broadcast_scores(r->id);
+             
+             return 0; // Không bị loại
+        } else if (r->game_mode == MODE_ELIMINATION) {
+             // MODE 1: Elimination - Không loại khi sai
+             // Chỉ không được điểm, chờ câu tiếp theo
+             sprintf(result_msg, "SAI ROI! Ban khong duoc diem cau nay.");
+             
+             // Broadcast scores để hiển thị điểm
+             broadcast_scores(r->id);
+             
              return 0; // Không bị loại
         } else {
-             // MODE 0 & 1: Practice/Elimination
-             // Bị loại, giữ mốc tiền an toàn
+             // MODE 0: Classic - Bị loại, giữ mốc an toàn
              
              // Tính mốc an toàn gần nhất
              // VD: Câu 1-5 -> 0đ, Câu 6-10 -> mốc câu 5, Câu 11-15 -> mốc câu 10
