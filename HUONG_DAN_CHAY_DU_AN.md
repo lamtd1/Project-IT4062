@@ -110,16 +110,19 @@ Câu 6-10:  3,000, 6,000, 10,000, 14,000, 22,000 (Mốc an toàn)
 Câu 11-15: 30,000, 40,000, 60,000, 85,000, 150,000
 ```
 
-### Mode 1: Loại Trừ (Elimination) - Đua tốc độ
+### Mode 1: Hợp Tác (Coop Mode) - Đồng Đội
 **Đặc điểm:**
-- 👥 **2-4 người chơi**
-- ⚡ **Ai đúng → NEXT luôn**: Người trả lời đúng nhanh nhất quyết định
-- 💸 **Điểm tích lũy**: Cộng dồn chênh lệch giữa 2 mức liên tiếp
-  - VD: Câu 1 (200 điểm), Câu 2 (+200 = 400 tổng)
-- ❌ **Trả lời sai → BỊ LOẠI**: Giữ nguyên điểm hiện tại, không chơi tiếp
-- 🏆 **Chiến thắng**: 
-  - Người sống sót cuối cùng
-  - Nếu nhiều người sống sót đến câu 15 → điểm cao nhất thắng
+- 👥 **2-4 người chơi** (Chung 1 team)
+- 🤝 **Chung sức leo núi**:
+  - Bất kỳ ai trả lời **ĐÚNG** → Cả team qua câu tiếp theo (Advance)
+  - Chỉ cần 1 người trả lời **SAI** → Cả team **THUA** ngay lập tức
+- 🆘 **Quyền trợ giúp chia sẻ**: 
+  - Cả team dùng chung 4 quyền trợ giúp
+  - VD: Người A dùng 50:50 → Người B, C, D không thể dùng 50:50 nữa
+- 🏆 **Chiến thắng**: Cả team cùng vượt qua câu số 15
+- 🎁 **Phần thưởng**:
+  - `total_win` +1 cho TẤT CẢ thành viên
+  - Điểm số tích lũy cá nhân (ai đúng người đó được điểm)
 
 ### Mode 2: Tính Điểm (Speed Attack) - Đua điểm
 **Đặc điểm:**
@@ -191,11 +194,13 @@ Câu 11-15: 30,000, 40,000, 60,000, 85,000, 150,000
 5. Trả lời sai câu 7 → Về mốc 5 = 2,000 điểm
 6. Game over
 
-### Mode 1 (Elimination):
-1. Tạo phòng mode 1 → Đợi 1 người khác join
-2. Host bấm Start → Câu hỏi 1
-3. Alice trả lời đúng trước → NEXT câu 2 ngay lập tức
-4. Bob trả lời sai câu 5 → BỊ LOẠI, Alice thắng
+### Mode 1 (Coop Mode):
+1. Tạo phòng mode 1 → Đợi bạn bè (2-4 người)
+2. Host bấm Start → Câu hỏi 1 hiện ra
+3. Alice biết đáp án, bấm trả lời ĐÚNG → Cả team lên câu 2
+4. Câu 5 khó, Bob dùng quyền "50:50" (Quyền này bị khóa với những người còn lại)
+5. Câu 10, Carol bấm trả lời SAI → **GAME OVER** (Cả team thua)
+6. (Nếu qua được câu 15 → Cả team cùng thắng 🎉)
 
 ### Mode 2 (Speed Attack):
 1. Tạo phòng mode 2 → Đợi 2-3 người join

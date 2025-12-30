@@ -92,6 +92,12 @@ void reset_room_for_replay(Room *r) {
     r->end_broadcasted = 0;
     r->game_id = 0;
     
+    // Reset flags dùng chung (Coop Mode)
+    r->shared_help_5050_used = 0;
+    r->shared_help_audience_used = 0;
+    r->shared_help_phone_used = 0;
+    r->shared_help_expert_used = 0;
+    
     // Reset trạng thái người chơi
     for (int i = 0; i < r->player_count; i++) {
         r->members[i].score = 0;
@@ -154,37 +160,44 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
     
     // Cập nhật thống kê thắng (chỉ multiplayer)
     if (r->player_count > 1) {
-        int final_winner_id = 0;
         
-        // MODE 1: Người sống sót cuối hoặc điểm cao nhất
-        if (r->game_mode == MODE_ELIMINATION) {
-             int survivors_count = 0;
-             int max_survivor_score = -1;
-             for (int i = 0; i < r->player_count; i++) {
-                 if (!r->members[i].is_eliminated) {
-                     survivors_count++;
-                     if (r->members[i].score > max_survivor_score) {
-                         max_survivor_score = r->members[i].score;
-                         final_winner_id = r->members[i].user_id;
-                     }
+        // MODE 1: COOP MODE
+        if (r->game_mode == MODE_COOP) {
+            // Team chỉ thắng khi HOÀN THÀNH 15 câu (current_index > 14)
+            // Nếu current_index < 15 nghĩa là team thua giữa chừng
+            int team_won = (r->current_question_idx >= 15);
+            
+            if (team_won) {
+                printf("[DB] COOP VICTORY! Updating total_win for all %d players.\n", r->player_count);
+                // Update total_win cho TẤT CẢ thành viên
+                for(int i=0; i<r->player_count; i++) {
+                    update_user_win(db, r->members[i].user_id);
+                }
+            } else {
+                printf("[DB] COOP LOST. No win stats update.\n");
+            }
+        } 
+        
+        // MODE 2: SCORE ATTACK (Người cao điểm nhất thắng)
+        else if (r->game_mode == MODE_SCORE_ATTACK) {
+             // Logic cũ
+             int winner_id = 0;
+             int max_score = -1;
+             for(int i=0; i<r->player_count; i++) {
+                 if(r->members[i].score > max_score) {
+                     max_score = r->members[i].score;
+                     winner_id = r->members[i].user_id;
                  }
              }
-             if (survivors_count == 0) final_winner_id = winner_id;
-        } 
-        // MODE 2: Điểm cao nhất
-        else if (r->game_mode == MODE_SCORE_ATTACK) {
-            final_winner_id = winner_id;
-        }
-        
-        // Cập nhật thắng
-        if (final_winner_id != 0) {
-            update_user_win(db, final_winner_id);
-            printf("[DB] Updated total_win for user ID %d\n", final_winner_id);
+             if (winner_id != 0) {
+                 update_user_win(db, winner_id);
+                 printf("[DB] Updated total_win for user ID %d\n", winner_id);
+             }
         }
         
         // Lưu thống kê cho tất cả người chơi
         for (int i = 0; i < r->player_count; i++) {
-            save_player_stat(db, r->members[i].user_id, r->game_id, r->members[i].score, 0);
+            save_player_stat(db, r->members[i].user_id, r->game_id, r->members[i].score);
             update_user_score(db, r->members[i].user_id, r->members[i].score);
             printf("[DB] Saved stats for user %d: score=%d\n", r->members[i].user_id, r->members[i].score);
         }

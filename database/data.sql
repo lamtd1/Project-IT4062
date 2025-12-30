@@ -72,17 +72,16 @@ INSERT INTO
     user_stats (
         user_id,
         game_id,
-        score_achieved,
-        rank
+        score_achieved
     )
-VALUES (1, 1, 5000, 1), -- User 1 thắng ván 1
-    (2, 1, 1000, 2), -- User 2 về nhì ván 1
-    (1, 2, 200, 2), -- User 1 thua sớm ván 2
-    (2, 2, 3000, 1), -- User 2 thắng ván 2
-    (3, 3, 4500, 1), -- User 3 thắng ván 3
-    (1, 3, 2000, 3), -- User 1 hạng 3 ván 3
-    (2, 3, 2500, 2), -- User 2 hạng 2 ván 3
-    (1, 4, 6000, 1);
+VALUES (1, 1, 5000), -- User 1 thắng ván 1
+    (2, 1, 1000), -- User 2 về nhì ván 1
+    (1, 2, 200), -- User 1 thua sớm ván 2
+    (2, 2, 3000), -- User 2 thắng ván 2
+    (3, 3, 4500), -- User 3 thắng ván 3
+    (1, 3, 2000), -- User 1 hạng 3 ván 3
+    (2, 3, 2500),
+    (1, 4, 6000);
 -- User 1 thắng ván 4
 
 -- DỮ LIỆU GIẢ: 100 CÂU HỎI TRẮC NGHIỆM AI LÀ TRIỆU PHÚ

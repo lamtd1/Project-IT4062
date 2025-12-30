@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS user_stats (
     user_id INTEGER,
     game_id INTEGER,
     score_achieved INTEGER,
-    rank INTEGER,
     PRIMARY KEY (user_id, game_id),
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (game_id) REFERENCES game_history (id)

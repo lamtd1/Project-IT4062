@@ -103,6 +103,13 @@ int room_create(int user_id, char *username, int socket_fd, char *room_name) {
             rooms[i].members[0].help_phone_used = 0;
             rooms[i].members[0].help_expert_used = 0;
             
+            // Reset shared flags (Coop Mode)
+            rooms[i].shared_help_5050_used = 0;
+            rooms[i].shared_help_audience_used = 0;
+            rooms[i].shared_help_phone_used = 0;
+            rooms[i].shared_help_expert_used = 0;
+
+            
             printf("[ROOM] Created Room %d: %s by %s\n", i, room_name, username);
             return i; // Trả về Room ID
         }
@@ -277,6 +284,13 @@ int room_start_game(int room_id, int user_id) {
         r->members[i].is_eliminated = 0; // Chưa bị loại
         r->members[i].has_answered = 0;  // Chưa trả lời (Mode 2)
     }
+    
+    // Reset Shared Flags for Coop
+    r->shared_help_5050_used = 0;
+    r->shared_help_audience_used = 0;
+    r->shared_help_phone_used = 0;
+    r->shared_help_expert_used = 0;
+
 
     // LOAD 15 CÂU HỎI NGẪU NHIÊN từ database
     // load_room_questions() sử dụng "ORDER BY RANDOM()" trong SQL
@@ -425,46 +439,55 @@ int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_
     Question *q = &r->questions[r->current_question_idx];
 
     // XỬ LÝ THEO LOẠI TRỢ GIÚP
-    if (lifeline_type == 1) {
-        // 50:50 - Loại bỏ 2 đáp án sai
-        if (p->help_5050_used) { 
-            strcpy(result_msg, "Ban da su dung quyen 50:50 roi!"); 
-            goto end; 
+    // Cờ để kiểm tra xem đã dùng chưa (trỏ tới biến phù hợp)
+    int *flag_used = NULL;
+    
+    if (r->game_mode == MODE_COOP) {
+        // Mode Coop: Dùng flag chung của phòng
+        if (lifeline_type == 1) flag_used = &r->shared_help_5050_used;
+        else if (lifeline_type == 2) flag_used = &r->shared_help_audience_used;
+        else if (lifeline_type == 3) flag_used = &r->shared_help_phone_used;
+        else if (lifeline_type == 4) flag_used = &r->shared_help_expert_used;
+    } else {
+        // Mode Khác: Dùng flag riêng của member
+        if (lifeline_type == 1) flag_used = &p->help_5050_used;
+        else if (lifeline_type == 2) flag_used = &p->help_audience_used;
+        else if (lifeline_type == 3) flag_used = &p->help_phone_used;
+        else if (lifeline_type == 4) flag_used = &p->help_expert_used;
+    }
+    
+    if (flag_used == NULL) {
+         strcpy(result_msg, "Loai tro giup khong hop le.");
+         return -1;
+    }
+    
+    // Kiểm tra và đánh dấu
+    if (*flag_used == 1) {
+        if (r->game_mode == MODE_COOP) {
+            strcpy(result_msg, "Quyen tro giup nay da duoc dong doi su dung!");
+        } else {
+            strcpy(result_msg, "Ban da su dung quyen nay roi!");
         }
-        p->help_5050_used = 1; // Đánh dấu đã dùng
-        get_5050_options(q, result_msg); // Gọi hàm game.c
+        return 1; // Handled but denied
+    }
+    
+    *flag_used = 1; // Đánh dấu đã dùng
+
+    // Gọi logic lấy nội dung trợ giúp
+    if (lifeline_type == 1) {
+        get_5050_options(q, result_msg); 
     } 
     else if (lifeline_type == 2) {
-        // Audience Poll - Thống kê % chọn từng đáp án
-        if (p->help_audience_used) { 
-            strcpy(result_msg, "Ban da su dung quyen Hoi y kien khan gia roi!"); 
-            goto end; 
-        }
-        p->help_audience_used = 1;
         get_audience_stats(q, result_msg);
     }
     else if (lifeline_type == 3) {
-        // Phone Friend - Người thân gợi ý đáp án
-        if (p->help_phone_used) { 
-            strcpy(result_msg, "Ban da su dung quyen Goi dien thoai cho nguoi than roi!"); 
-            goto end; 
-        }
-        p->help_phone_used = 1;
         get_phone_friend_response(q, result_msg);
     }
     else if (lifeline_type == 4) {
-        // Expert Advice - Chuyên gia tư vấn
-        if (p->help_expert_used) { 
-            strcpy(result_msg, "Ban da su dung quyen To tu van tai cho roi!"); 
-            goto end; 
-        }
-        p->help_expert_used = 1;
         get_expert_advice(q, result_msg);
-    } else {
-        strcpy(result_msg, "Loai tro giup khong hop le.");
-    }
-
-end:
+    } 
+    
+    return 1;
     return 1;
 }
 
@@ -611,14 +634,15 @@ int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
 }
 
 /**
- * MODE 1: LOẠI TRỪ (Elimination Mode)
- * - Multiplayer (≥2)
- * - Cumulative prize difference
- * - Eliminate + remove player on wrong
+ * MODE 1: COOP (Hợp tác)
+ * - Multiplayer (2-4 người)
+ * - Trả lời ĐÚNG -> Cả team next câu
+ * - Trả lời SAI -> Cả team THUA
+ * - Chung quyền trợ giúp
  * 
- * @return: 3 (correct + instant advance), 2 (eliminated)
+ * @return: 3 (correct + instant advance), 2 (eliminated entire team)
  */
-int room_handle_answer_elimination(int user_id, char *answer, char *result_msg) {
+int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
         strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
@@ -656,46 +680,33 @@ int room_handle_answer_elimination(int user_id, char *answer, char *result_msg) 
     int current_level = r->current_question_idx + 1;
     
     if (res == 1) {
-        // Đúng: Cộng dồn chênh lệch
+        // --- TRƯỜNG HỢP ĐÚNG ---
+        // Cộng điểm cho người trả lời (tích lũy cá nhân)
         int prize = get_prize_for_level(current_level);
         int prev_prize = (current_level > 1) ? get_prize_for_level(current_level - 1) : 0;
         int diff = prize - prev_prize;
         
         r->members[idx].score += diff;
-        sprintf(result_msg, "CHINH XAC! +%d diem. Tong: %d", diff, r->members[idx].score);
+        sprintf(result_msg, "CHINH XAC! Dong doi da dua ca doi len cau hoi ke tiep. (+%d diem)", diff);
         broadcast_scores(r->id);
         
-        printf("[MODE1] Player %s correct → Advancing immediately\n", r->members[idx].username);
-        return 3; // Correct + Instant Advance
+        printf("[COOP] Player %s correct → Team advances\n", r->members[idx].username);
+        return 3; // Correct + Instant Advance (cho cả team)
     } else {
-        // Sai: Bị loại khỏi phòng (GIỮ NGUYÊN ĐIỂM HIỆN TẠI)
-        int final_score = r->members[idx].score;
+        // --- TRƯỜNG HỢP SAI ---
+        // Cả team bị loại ngay lập tức
+        printf("[COOP] Player %s wrong → TEAM ELIMINATED\n", r->members[idx].username);
         
-        printf("[MODE1] Player %s eliminated with score %d\n", r->members[idx].username, final_score);
-        
-        // Stats will be saved in broadcast_end_game with correct game_id
-        
-        sprintf(result_msg, "SAI ROI! Ban da bi loai. Tong: %d|eliminated:1|wrong_answer:0", final_score);
-        r->members[idx].is_eliminated = 1;
+        // Đánh dấu tất cả là eliminated
+        for(int i=0; i<r->player_count; i++) {
+            r->members[i].is_eliminated = 1;
+        }
+
+        sprintf(result_msg, "SAI ROI! Ca doi da bi loai tai cau so %d. Game Over!", current_level);
         broadcast_scores(r->id);
         
-        // === CHECK IF ONLY 1 PLAYER REMAINS (AUTO-WIN) ===
-        int survivors_count = 0;
-        int last_survivor_idx = -1;
-        for (int i = 0; i < r->player_count; i++) {
-            if (!r->members[i].is_eliminated) {
-                survivors_count++;
-                last_survivor_idx = i;
-            }
-        }
-        
-        // If only 1 survivor left, end game immediately
-        if (survivors_count == 1 && last_survivor_idx != -1) {
-            printf("[MODE1] Only 1 survivor left (%s) - Auto-ending game\n", r->members[last_survivor_idx].username);
-            broadcast_end_game(r->id, global_db);
-        }
-        
-        return 2; // Bị loại
+        // Return 2 để trigger broadcast_end_game
+        return 2;
     }
 }
 
@@ -806,14 +817,14 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
     }
     
     // Dispatch to mode-specific handler
-    if (r->game_mode == MODE_CLASSIC) {
-        return room_handle_answer_practice(user_id, answer, result_msg);
-    }
-    else if (r->game_mode == MODE_ELIMINATION) {
-        return room_handle_answer_elimination(user_id, answer, result_msg);
-    }
-    else if (r->game_mode == MODE_SCORE_ATTACK) {
-        return room_handle_answer_speedattack(user_id, answer, result_msg);
+    switch (r->game_mode) {
+        case MODE_CLASSIC:
+            return room_handle_answer_practice(user_id, answer, result_msg);
+        case MODE_COOP:
+            return room_handle_answer_coop(user_id, answer, result_msg);
+        case MODE_SCORE_ATTACK:
+            return room_handle_answer_speedattack(user_id, answer, result_msg);
+        default: break;
     }
     
     strcpy(result_msg, "Loi: Che do khong hop le.");
@@ -864,17 +875,17 @@ int room_walk_away(int user_id, char *result_msg) {
     
     // === CHECK IF GAME SHOULD END ===
     int survivors_count = 0;
-    int last_survivor_idx = -1;
+    
+    // Check remaining active players
     for (int i = 0; i < r->player_count; i++) {
         if (!r->members[i].is_eliminated) {
             survivors_count++;
-            last_survivor_idx = i;
         }
     }
     
-    // MODE 1 (Elimination): If only 1 survivor left, they win
-    if (r->game_mode == MODE_ELIMINATION && survivors_count == 1 && last_survivor_idx != -1) {
-        printf("[WALK_AWAY] Mode 1: Only 1 survivor left (%s) - Auto-ending game\n", r->members[last_survivor_idx].username);
+    // MODE 1 (Coop): If count == 0 (all eliminated/walked away) -> End game
+    if (r->game_mode == MODE_COOP && survivors_count == 0) {
+        printf("[WALK_AWAY] Mode 1: All players eliminated/left - Auto-ending game\n");
         broadcast_end_game(r->id, global_db);
     }
     // MODE 2 (Score Attack): If ALL players walked away, end game and find winner by score

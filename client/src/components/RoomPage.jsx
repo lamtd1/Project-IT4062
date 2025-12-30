@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [], onGetIdleUsers, onSendInvite }) => {
     const [showInvite, setShowInvite] = useState(false);
@@ -18,127 +19,171 @@ const RoomPage = ({ roomInfo, members, isHost, onLeave, onStart, idleUsers = [],
     return (
         <React.Fragment>
             {/* Invitation Modal */}
-            {showInvite && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-                    <div className="w-full max-w-md bg-white shadow-xl border-2 border-gray-200 rounded-xl">
-                        <div className="flex flex-row items-center justify-between p-6">
-                            <h3 className="text-xl font-semibold text-black">Mời bạn bè</h3>
-                            <button onClick={() => setShowInvite(false)} className="px-3 py-1 hover:bg-gray-100 rounded transition">✕</button>
-                        </div>
-                        <div className="space-y-4 px-6 pb-6">
-                            <div className="flex justify-between items-center bg-gray-50 p-2 rounded text-xs text-gray-600">
-                                <span>Người chơi đang rảnh: {idleUsers.length}</span>
-                                <button onClick={onGetIdleUsers} className="text-indigo-600 hover:underline">Làm mới</button>
+            <AnimatePresence>
+                {showInvite && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+                            className="w-full max-w-md bg-white/90 backdrop-blur-xl shadow-2xl border border-white/50 rounded-2xl overflow-hidden"
+                        >
+                            <div className="flex flex-row items-center justify-between p-6 border-b border-gray-100">
+                                <h3 className="text-xl font-serif italic text-ren-charcoal">Summon Allies</h3>
+                                <button onClick={() => setShowInvite(false)} className="px-3 py-1 hover:bg-gray-100 rounded-full transition">✕</button>
                             </div>
-                            <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                {idleUsers.length === 0 ? (
-                                    <div className="text-center py-8 text-gray-400">Không có ai đang rảnh :(</div>
-                                ) : (
-                                    idleUsers.map((u, idx) => (
-                                        <div key={idx} className="flex justify-between items-center p-3 rounded-lg border-2 border-gray-200 hover:bg-gray-50 transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">
-                                                    {u.charAt(0).toUpperCase()}
+                            <div className="space-y-4 px-6 pb-6 pt-4">
+                                <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded-lg text-xs text-ren-gray border border-gray-100">
+                                    <span className="font-bold uppercase tracking-wider">Available Souls: {idleUsers.length}</span>
+                                    <button onClick={onGetIdleUsers} className="text-ren-gold hover:text-ren-charcoal transition-colors font-bold">Refresh</button>
+                                </div>
+                                <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {idleUsers.length === 0 ? (
+                                        <div className="text-center py-8 text-ren-gray italic">The void is empty...</div>
+                                    ) : (
+                                        idleUsers.map((u, idx) => (
+                                            <motion.div
+                                                key={idx}
+                                                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} delay={idx * 0.05}
+                                                className="flex justify-between items-center p-3 rounded-xl border border-gray-100 hover:border-ren-gold/30 hover:bg-white transition-all group"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-ren-charcoal text-white flex items-center justify-center text-xs font-serif italic">
+                                                        {u.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="font-medium text-ren-charcoal">{u}</span>
                                                 </div>
-                                                <span className="font-semibold text-gray-700">{u}</span>
-                                            </div>
-                                            <button onClick={() => handleInviteClick(u)} className="h-8 px-4 py-1 border-2 border-indigo-500 text-indigo-600 hover:bg-indigo-50 rounded-lg transition">
-                                                Mời
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
+                                                <button onClick={() => handleInviteClick(u)} className="h-8 px-4 text-xs font-bold uppercase tracking-wider border border-ren-charcoal/20 text-ren-charcoal hover:bg-ren-charcoal hover:text-white rounded-lg transition-all">
+                                                    Summon
+                                                </button>
+                                            </motion.div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-            <div className="max-w-5xl w-full h-[650px] flex shadow-2xl border-2 border-gray-200 bg-white rounded-xl">
-                <div className="flex-1 p-8 flex flex-col border-r border-gray-200">
-                    <div className="mb-8 flex justify-between items-start">
-                        <div>
-                            <h2 className="text-3xl font-bold text-black tracking-tight mb-2">{roomInfo.name}</h2>
-                            <div className="flex items-center gap-2">
-                                <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-mono text-xs border-2 border-gray-300">
-                                    Room ID: {roomInfo.id}
-                                </span>
-                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${isHost ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-                                    {isHost ? "Host" : "Member"}
-                                </span>
-                            </div>
-                        </div>
+            <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="max-w-6xl w-full h-[700px] flex shadow-2xl border border-white/40 bg-white/60 backdrop-blur-2xl rounded-3xl overflow-hidden"
+            >
+                {/* Main Area */}
+                <div className="flex-1 p-10 flex flex-col relative">
+                    <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+                        <h1 className="text-[120px] font-serif leading-none italic">Room</h1>
                     </div>
 
-                    <div className="flex-1 mb-6 bg-gray-50 border-2 border-gray-200 shadow-inner flex items-center justify-center p-6 relative overflow-hidden rounded-xl">
-                        <div className="absolute inset-0 opacity-5" />
+                    <div className="mb-10 relative z-10">
+                        <div className="inline-block px-3 py-1 bg-ren-charcoal text-white text-[10px] font-bold uppercase tracking-[0.2em] rounded-full mb-3 shadow-lg shadow-ren-charcoal/20">
+                            Sanctuary ID: {roomInfo.id}
+                        </div>
+                        <h2 className="text-5xl font-serif italic text-ren-charcoal tracking-tight mb-2">{roomInfo.name}</h2>
+                        <div className="h-1 w-20 bg-ren-gold rounded-full"></div>
+                    </div>
 
+                    <div className="flex-1 flex flex-col items-center justify-center relative">
                         {isHost ? (
                             <div className="text-center w-full max-w-sm relative z-10">
-                                <button
+                                <motion.button
                                     onClick={onStart}
-                                    disabled={members.length < 1}
-                                    className={`w-full py-8 text-xl font-bold transition-all rounded-xl ${members.length < 1 ? 'opacity-50 bg-gray-400 cursor-not-allowed' : 'hover:scale-105 shadow-xl bg-indigo-600 hover:bg-indigo-700 text-white'
+                                    disabled={members.length < (isMode0 ? 1 : 1)} /* Actually classic mode requires >1 but for dev we allow 1 */
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    className={`w-full py-6 text-2xl font-serif italic transition-all rounded-2xl shadow-xl ${members.length < 1
+                                            ? 'opacity-50 bg-gray-300 text-gray-500 cursor-not-allowed'
+                                            : 'bg-ren-gold text-white hover:bg-[#C5A028] shadow-ren-gold/30'
                                         }`}
                                 >
-                                    {members.length < 1 ? 'Chờ người chơi...' : 'BẮT ĐẦU GAME 🚀'}
-                                </button>
-                                <p className="mt-4 text-gray-600 text-sm font-medium">
-                                    {members.length < 1 ? "Cần ít nhất 1 người chơi để bắt đầu" : "Đã sẵn sàng!"}
+                                    {members.length < 1 ? 'Awaiting Souls...' : 'Commence Ritual'}
+                                </motion.button>
+                                <p className="mt-6 text-ren-charcoal/60 text-sm font-medium tracking-wide">
+                                    {members.length < 1 ? "At least one soul is required" : "Sanctuary is ready"}
                                 </p>
                             </div>
                         ) : (
-                            <div className="text-center space-y-4 relative z-10">
-                                <div className="w-16 h-16 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin mx-auto"></div>
-                                <p className="text-gray-600 font-medium">Đang chờ chủ phòng bắt đầu...</p>
+                            <div className="text-center space-y-6 relative z-10">
+                                <div className="w-20 h-20 border-4 border-ren-border border-t-ren-charcoal rounded-full animate-spin mx-auto opacity-80"></div>
+                                <p className="text-ren-charcoal/70 font-serif italic text-lg">Waiting for the Architect to begin...</p>
                             </div>
                         )}
                     </div>
 
-                    <button onClick={onLeave} className="self-start px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-2 border-red-300 rounded-lg transition">
-                        ← Rời phòng
-                    </button>
+                    <motion.button
+                        whileHover={{ x: -4 }}
+                        onClick={onLeave}
+                        className="self-start text-ren-gray hover:text-red-600 font-medium text-sm flex items-center gap-2 transition-colors mt-auto"
+                    >
+                        <span>←</span> Depart Sanctuary
+                    </motion.button>
                 </div>
 
-                {/* Sidebar */}
-                <div className="w-80 bg-gray-50 p-6 flex flex-col border-l border-gray-200">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-semibold text-black flex items-center gap-2">
-                            Người chơi
-                            <span className="bg-white border-2 border-gray-300 px-2 py-0.5 rounded text-black text-sm">{members.length}/{maxPlayers}</span>
+                {/* Sidebar - Players */}
+                <div className="w-96 bg-white/40 border-l border-white/40 p-8 flex flex-col">
+                    <div className="flex justify-between items-center mb-8">
+                        <h3 className="font-serif italic text-2xl text-ren-charcoal">
+                            Assemblage
                         </h3>
                         {isHost && !isMode0 && (
-                            <button onClick={handleOpenInvite} className="h-8 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded transition">
-                                + Mời
-                            </button>
+                            <motion.button
+                                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                                onClick={handleOpenInvite}
+                                className="h-8 px-4 text-xs font-bold bg-ren-charcoal text-white rounded-full shadow-lg shadow-ren-charcoal/10"
+                            >
+                                + INVITE
+                            </motion.button>
                         )}
                     </div>
 
-                    <div className="space-y-3 flex-1 overflow-y-auto">
-                        {members.map((mem, idx) => (
-                            <div key={idx} className="p-3 flex items-center gap-3 border-2 border-gray-200 shadow-sm transition-all hover:shadow-md bg-white rounded-lg">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ${mem.isHost ? 'bg-indigo-600' : 'bg-gray-400'
-                                    }`}>
-                                    {mem.username.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1 truncate">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="font-semibold text-sm text-black truncate">{mem.username}</span>
-                                        {mem.isHost && <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">HOST</span>}
+                    <div className="text-xs font-bold text-ren-gray uppercase tracking-widest mb-4 flex justify-between">
+                        <span>Members</span>
+                        <span>{members.length}/{maxPlayers}</span>
+                    </div>
+
+                    <div className="space-y-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        <AnimatePresence>
+                            {members.map((mem, idx) => (
+                                <motion.div
+                                    key={mem.username || idx}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    transition={{ delay: idx * 0.1 }}
+                                    className={`relative p-4 flex items-center gap-4 bg-white/80 backdrop-blur-md rounded-xl border transition-all hover:shadow-lg group ${mem.isHost ? 'border-ren-gold/50 shadow-ren-gold/5' : 'border-white/60 shadow-sm'
+                                        }`}
+                                >
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-serif italic text-lg shadow-md ${mem.isHost ? 'bg-gradient-to-br from-ren-gold to-[#B89020]' : 'bg-ren-charcoal'
+                                        }`}>
+                                        {mem.username.charAt(0).toUpperCase()}
                                     </div>
-                                    <div className="text-xs text-gray-600">Điểm: {mem.score}</div>
-                                </div>
-                            </div>
-                        ))}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="font-bold text-ren-charcoal truncate text-lg group-hover:text-ren-gold transition-colors">{mem.username}</span>
+                                        </div>
+                                        <div className="text-xs text-ren-gray font-medium flex items-center gap-2">
+                                            Score: <span className="text-ren-charcoal font-bold">{mem.score}</span>
+                                            {mem.isHost && (
+                                                <span className="px-1.5 py-0.5 bg-ren-gold/10 text-ren-gold rounded text-[9px] font-bold uppercase tracking-wider border border-ren-gold/20">Architect</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+
                         {!isMode0 && Array.from({ length: Math.max(0, maxPlayers - members.length) }).map((_, i) => (
-                            <div key={`empty-${i}`} className="p-3 border-2 border-dashed border-gray-300 rounded-lg flex items-center gap-3 opacity-50">
-                                <div className="w-10 h-10 rounded-full bg-gray-200"></div>
-                                <div className="h-4 bg-gray-200 w-20 rounded"></div>
+                            <div key={`empty-${i}`} className="p-4 border-2 border-dashed border-gray-200/50 rounded-xl flex items-center gap-4 opacity-30">
+                                <div className="w-12 h-12 rounded-full bg-gray-200"></div>
+                                <div className="h-4 bg-gray-200 w-24 rounded"></div>
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
+            </motion.div>
         </React.Fragment>
     );
 };

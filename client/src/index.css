@@ -1,33 +1,83 @@
 @import "tailwindcss";
 
-/* Smooth scroll behavior for entire page and all elements */
-* {
-  scroll-behavior: smooth;
+/* 
+ * 🎨 RENAISSANCE THEME 
+ * 2026 Winter Edition Style
+ */
+
+@theme {
+  /* Fonts */
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: 'Playfair Display', serif;
+
+  /* Colors */
+  --color-ren-cream: #F9F8F6;
+  --color-ren-charcoal: #1A1A1A;
+  --color-ren-gray: #808080;
+  --color-ren-gold: #D4AF37;
+  --color-ren-glass: rgba(255, 255, 255, 0.6);
+  --color-ren-border: rgba(0, 0, 0, 0.06);
+
+  /* Animation Utilities */
+  --animate-fade-in-up: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-scale-in: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
-/* Custom scrollbar styling */
+/* Global Reset & Base Styles */
+html,
+body {
+  background-color: transparent;
+  color: var(--color-ren-charcoal);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-serif {
+  font-family: var(--font-serif);
+}
+
+/* Custom Scrollbar (Minimalist) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #888;
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
-  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* For Firefox */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #888 #f1f1f1;
+  background: rgba(0, 0, 0, 0.2);
 }

@@ -9,7 +9,7 @@
 
 // Game Mode Constants
 #define MODE_CLASSIC 0      // Cổ Điển (đơn, mốc an toàn)
-#define MODE_ELIMINATION 1  // Loại Trừ (multi, ai đúng next)
+#define MODE_COOP 1         // Hợp Tác (multi, đồng đội, chung trợ giúp)
 #define MODE_SCORE_ATTACK 2 // Tính Điểm (multi, tất cả trả lời)
 
 // Trạng thái phòng
@@ -29,7 +29,7 @@ typedef struct {
     int is_eliminated; // 1: Đã bị loại
     int has_answered;  // 1: Đã trả lời câu hiện tại (Mode 2)
 
-    // --- TRẠNG THÁI TRỢ GIÚP ---
+    // --- TRẠNG THÁI TRỢ GIÚP (Cho Mode Private/Classic) ---
     int help_5050_used;      // 1. 50:50
     int help_audience_used;  // 2. Khán giả
     int help_phone_used;     // 3. Gọi điện thoại
@@ -50,9 +50,15 @@ typedef struct {
     time_t question_start_time; // Thời điểm bắt đầu câu hỏi hiện tại
     
     char game_log[4096]; // Log diễn biến: "UserID:QuestionID:Answer,"
-    int game_mode; // 0: Practice, 1: Elimination, 2: Speed Attack
+    int game_mode; // 0: Classic, 1: Coop, 2: Speed Attack
     int game_id; // Database game_history ID (for saving stats)
     int end_broadcasted; // Flag: 1 if game end already broadcasted
+
+    // --- TRẠNG THÁI TRỢ GIÚP DÙNG CHUNG (Cho Mode Coop) ---
+    int shared_help_5050_used;
+    int shared_help_audience_used;
+    int shared_help_phone_used;
+    int shared_help_expert_used;
 } Room;
 
 // Khởi tạo hệ thống phòng
@@ -75,7 +81,7 @@ void room_get_detail_string(int room_id, char *buffer);
 
 // Mode-specific answer handlers
 int room_handle_answer_practice(int user_id, char *answer, char *result_msg);
-int room_handle_answer_elimination(int user_id, char *answer, char *result_msg);
+int room_handle_answer_coop(int user_id, char *answer, char *result_msg);
 int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg);
 
 // Dispatcher (calls appropriate mode handler)

@@ -119,10 +119,10 @@ int save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *lo
     }
 }
 
-void save_player_stat(sqlite3 *db, int user_id, int game_id, int score, int rank) {
+void save_player_stat(sqlite3 *db, int user_id, int game_id, int score) {
     char sql[256];
     char *err = 0;
-    sprintf(sql, "INSERT INTO user_stats (user_id, game_id, score_achieved, rank) VALUES (%d, %d, %d, %d);", user_id, game_id, score, rank);
+    sprintf(sql, "INSERT INTO user_stats (user_id, game_id, score_achieved) VALUES (%d, %d, %d);", user_id, game_id, score);
     if (sqlite3_exec(db, sql, 0, 0, &err) == SQLITE_OK) {
         printf("Đã lưu thống kê người chơi.\n");
     } else {
@@ -297,7 +297,7 @@ void get_user_game_history(sqlite3 *db, int user_id, char *result_buffer, size_t
     
     const char *sql = 
         "SELECT gh.id, gh.room_name, gh.winner_id, gh.played_at, "
-        "       gh.game_mode, gh.log_data, us.score_achieved, us.rank "
+        "       gh.game_mode, gh.log_data, us.score_achieved "
         "FROM game_history gh "
         "JOIN user_stats us ON gh.id = us.game_id "
         "WHERE us.user_id = ? "
@@ -321,12 +321,11 @@ void get_user_game_history(sqlite3 *db, int user_id, char *result_buffer, size_t
         int game_mode = sqlite3_column_int(stmt, 4);
         const char *log_data = (const char *)sqlite3_column_text(stmt, 5);
         int score = sqlite3_column_int(stmt, 6);
-        int rank = sqlite3_column_int(stmt, 7);
         
-        // Format: game_id|room_name|winner_id|timestamp|mode|score|rank|log_data;
-        snprintf(temp, sizeof(temp), "%d|%s|%d|%s|%d|%d|%d|%s;",
+        // Format: game_id|room_name|winner_id|timestamp|mode|score|log_data;
+        snprintf(temp, sizeof(temp), "%d|%s|%d|%s|%d|%d|%s;",
                  game_id, room_name ? room_name : "", winner_id,
-                 played_at ? played_at : "", game_mode, score, rank,
+                 played_at ? played_at : "", game_mode, score,
                  log_data ? log_data : "");
         
         // Append to result buffer if there's space

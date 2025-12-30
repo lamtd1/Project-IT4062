@@ -1,201 +1,126 @@
-import React, { useState, useEffect } from "react";
-import Leaderboard from "./Leaderboard";
-import CreateRoomPanel from "./CreateRoomPanel";
-import RoomListPage from "./RoomListPage";
-import ReplayModal from "./ReplayModal";
-import { OPS } from "../lib/ops";
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const HomePage = ({
-  username,
-  userId,
-  score,
-  socket,
-  onLogout,
-  onCreateRoom,
-  onJoinRoom,
-  rooms,
-  leaderboard,
-  onRequestLeaderboard,
-}) => {
-  const [activeTab, setActiveTab] = useState('rooms'); // 'rooms' or 'history'
-  const [games, setGames] = useState([]);
-  const [replayGame, setReplayGame] = useState(null);
+// Sub-components can be imported or defined here for clean single-file structure if preferred
+// But we'll assume they exist and wrap them or restyle them.
+// Actually, HomePage orchestrates RoomListPage, CreateRoomPanel, Leaderboard.
+// We will revamp HomePage layout to be a 'Dashboard'
 
-  useEffect(() => {
-    if (onRequestLeaderboard) {
-      onRequestLeaderboard();
-    }
+import RoomListPage from './RoomListPage';
+import CreateRoomPanel from './CreateRoomPanel';
+import Leaderboard from './Leaderboard';
+import GameHistory from './GameHistory';
 
-    const intervalId = setInterval(() => {
-      if (onRequestLeaderboard) {
-        onRequestLeaderboard();
-      }
-    }, 5000);
-
-    return () => clearInterval(intervalId);
-  }, []);
-
-  // Fetch history when switching to history tab
-  useEffect(() => {
-    if (activeTab === 'history' && userId) {
-      const packet = new Uint8Array(1);
-      packet[0] = OPS.GET_GAME_HISTORY;
-      socket.emit('client_to_server', packet);
-
-      const handleServerMessage = (data) => {
-        const view = new Uint8Array(data);
-        const opcode = view[0];
-
-        if (opcode === OPS.GAME_HISTORY_RESPONSE) {
-          const textDecoder = new TextDecoder();
-          const payload = textDecoder.decode(view.slice(1));
-
-          if (!payload) {
-            setGames([]);
-            return;
-          }
-
-          const gameEntries = payload.split(';').filter(e => e);
-          const parsedGames = gameEntries.map(entry => {
-            const [gameId, roomName, winnerId, timestamp, gameMode, score, rank, logData] = entry.split('|');
-            return {
-              gameId: parseInt(gameId),
-              roomName,
-              winnerId: parseInt(winnerId),
-              timestamp,
-              gameMode: parseInt(gameMode),
-              score: parseInt(score),
-              rank: parseInt(rank),
-              logData
-            };
-          });
-
-          setGames(parsedGames);
-        }
-      };
-
-      socket.on('server_to_client', handleServerMessage);
-      return () => socket.off('server_to_client', handleServerMessage);
-    }
-  }, [activeTab, userId]);
+const HomePage = ({ username, userId, score, socket, onLogout, onCreateRoom, onJoinRoom, rooms, leaderboard, onRequestLeaderboard }) => {
+  const [showHistory, setShowHistory] = useState(false);
 
   return (
-    <div className="bg-gray-100 p-8 w-full max-w-7xl flex flex-col gap-8 shadow-inner rounded-3xl border border-white/50 my-8">
-      {/* Header */}
-      <div className="flex justify-between items-center p-5 border-2 border-gray-200 shadow-sm bg-white/80 backdrop-blur-sm sticky top-4 z-10 rounded-xl">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center text-xl font-bold shadow-md">
-            {username ? username.charAt(0).toUpperCase() : "?"}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-black">{username}</h1>
-            <p className="text-sm font-semibold text-gray-600 flex items-center gap-1">
-              <span className="text-amber-500">⭐️</span> {score} points
-            </p>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="w-full max-w-7xl mx-auto p-4 md:p-8 h-screen flex flex-col relative"
+    >
+      {/* Header / Top Bar */}
+      <header className="flex justify-between items-end mb-12 border-b border-[#1A1A1A] pb-6">
+        <div>
+          <h1 className="text-6xl font-serif italic text-[#1A1A1A] leading-tight tracking-tighter">
+            Sanctuary
+          </h1>
+          <div className="flex items-center gap-3 mt-4 text-xs font-mono uppercase tracking-widest bg-ren-charcoal text-white px-4 py-2 rounded-full shadow-md">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="opacity-80">Connected: {username}</span>
+            <span className="w-px h-3 bg-white/20 mx-2" />
+            <span className="text-ren-gold font-bold">Score: {score}</span>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-6 items-center">
+          <button
+            onClick={() => setShowHistory(true)}
+            className="group flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#1A1A1A] hover:text-ren-gold transition-colors"
+          >
+            Archives
+            <span className="block h-[1px] w-8 bg-[#1A1A1A] group-hover:bg-ren-gold transition-colors" />
+          </button>
           <button
             onClick={onLogout}
-            className="px-4 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+            className="group flex items-center gap-2 text-xs font-bold uppercase tracking-widest hover:text-red-600 transition-colors"
           >
-            Đăng xuất
+            Disconnect
+            <span className="block h-[1px] w-8 bg-[#1A1A1A] group-hover:bg-red-600 transition-colors" />
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Content Grid */}
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Left Column: Leaderboard & Create */}
-        <div className="w-full md:w-1/3 flex flex-col gap-6">
-          <CreateRoomPanel onCreate={onCreateRoom} />
-          <div className="flex flex-col">
-            <Leaderboard data={leaderboard} onRefresh={onRequestLeaderboard} />
-          </div>
-        </div>
+      {/* Main Content Grid */}
+      <div className="flex-1 grid grid-cols-12 gap-8 min-h-0">
 
-        {/* Right Column: Tabs (Rooms / History) */}
-        <div className="flex-1">
-          {/* Tab Headers */}
-          <div className="flex gap-2 mb-4">
-            <button
-              onClick={() => setActiveTab('rooms')}
-              className={`flex-1 py-3 px-4 font-semibold rounded-t-xl transition ${activeTab === 'rooms'
-                ? 'bg-white text-black border-2 border-b-0 border-gray-200'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                }`}
-            >
-              🎮 Phòng Chơi
-            </button>
-            <button
-              onClick={() => setActiveTab('history')}
-              className={`flex-1 py-3 px-4 font-semibold rounded-t-xl transition ${activeTab === 'history'
-                ? 'bg-white text-black border-2 border-b-0 border-gray-200'
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                }`}
-            >
-              📜 Lịch Sử
-            </button>
-          </div>
+        {/* Left Column: Create & Leaderboard (4 cols) */}
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-8 overflow-y-auto custom-scrollbar pr-2">
+          <section>
+            <CreateRoomPanel onCreate={onCreateRoom} />
+          </section>
 
-          {/* Tab Content */}
-          {activeTab === 'rooms' ? (
-            <RoomListPage rooms={rooms} onJoin={onJoinRoom} />
-          ) : (
-            <div className="bg-white border-2 border-gray-200 rounded-xl rounded-tl-none shadow-lg p-6">
-              <h3 className="text-xl font-bold mb-4 text-black">📜 Lịch Sử Trận Đấu</h3>
-              {games.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <p className="text-lg">Chưa có trận đấu nào</p>
-                  <p className="text-sm mt-2">Chơi game để xây dựng lịch sử!</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {games.map((game) => (
-                    <div
-                      key={game.gameId}
-                      onClick={() => setReplayGame(game)}
-                      className="p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-400 hover:shadow-md transition cursor-pointer group"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="font-bold text-black group-hover:text-indigo-600 transition">
-                            {game.roomName}
-                          </h4>
-                          <p className="text-sm text-gray-600">
-                            {game.gameMode === 1 ? '⚔️ Loại trừ' : '⚡ Tính điểm'} •
-                            Hạng {game.rank} • {game.score} điểm
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">{game.timestamp}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {game.winnerId === userId && (
-                            <span className="text-yellow-500 text-2xl">🏆</span>
-                          )}
-                          <button className="px-3 py-1 bg-indigo-500 text-white rounded-lg text-sm hover:bg-indigo-600 transition">
-                            ▶️ Xem
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <section className="flex-1 min-h-[300px] border border-[#1A1A1A] bg-[#F9F8F6]/90 backdrop-blur-md p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,0.5)] relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-2 opacity-10">
+              <span className="text-6xl">🏆</span>
             </div>
-          )}
+            <h3 className="text-2xl font-serif italic mb-6 border-b border-gray-200 pb-2">Hall of Fame</h3>
+            <Leaderboard
+              leaderboard={leaderboard}
+              onRequest={onRequestLeaderboard}
+              currentUserId={userId}
+            />
+          </section>
+        </div>
+
+        {/* Right Column: Room List (8 cols) */}
+        <div className="col-span-12 lg:col-span-8 flex flex-col h-full min-h-0">
+          <div className="flex-1 border border-[#1A1A1A] bg-white/50 backdrop-blur-md p-8 shadow-[8px_8px_0px_0px_rgba(26,26,26,1)] flex flex-col overflow-hidden relative">
+            {/* Decor */}
+            <div className="absolute -top-10 -right-10 w-40 h-40 bg-ren-gold/10 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="flex justify-between items-center mb-8 z-10">
+              <h2 className="text-4xl font-serif italic text-ren-charcoal">Active Rituals</h2>
+              <div className="text-xs font-mono bg-ren-charcoal text-white px-3 py-1 rounded-full">
+                {rooms.length} LIVE
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2 -mr-2 custom-scrollbar z-10">
+              <RoomListPage rooms={rooms} onJoin={onJoinRoom} />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Replay Modal */}
-      {replayGame && (
-        <ReplayModal
-          game={replayGame}
-          userId={userId}
-          socket={socket}
-          onClose={() => setReplayGame(null)}
-        />
-      )}
-    </div>
+      {/* GAME HISTORY MODAL OVERLAY */}
+      <AnimatePresence>
+        {showHistory && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="absolute inset-0 z-50 bg-[#F9F8F6] flex flex-col"
+          >
+            <button
+              onClick={() => setShowHistory(false)}
+              className="absolute top-8 right-8 z-50 flex items-center gap-2 group"
+            >
+              <span className="text-xs font-bold uppercase tracking-widest group-hover:text-ren-gold transition-colors">Close Archives</span>
+              <div className="w-8 h-8 rounded-full border border-[#1A1A1A] flex items-center justify-center group-hover:bg-[#1A1A1A] group-hover:text-white transition-all">
+                ✕
+              </div>
+            </button>
+
+            {/* Render GameHistory fully inside */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <GameHistory userId={userId} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+    </motion.div>
   );
 };
 

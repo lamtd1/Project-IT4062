@@ -21,7 +21,7 @@ void get_user(sqlite3 *db);
 void get_questions(sqlite3* db, int difficulty, int limit);
 void get_questions_by_ids(sqlite3 *db, const char *ids, char *result_buffer, size_t buffer_size);
 int save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *log);
-void save_player_stat(sqlite3 *db, int user_id, int game_id, int score, int rank);
+void save_player_stat(sqlite3 *db, int user_id, int game_id, int score);
 void delete_record(sqlite3 *db, char *table, char *condition);
 
 // Admin functions

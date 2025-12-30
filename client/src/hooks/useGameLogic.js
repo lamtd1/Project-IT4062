@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { socket } from '../lib/socket';
 import { OPS } from '../lib/ops';
-
-const socket = io('http://localhost:4000');
 
 export const useGameLogic = () => {
     const navigate = useNavigate();
@@ -11,18 +9,11 @@ export const useGameLogic = () => {
     // Initialize from localStorage if available
     const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
     const [password, setPassword] = useState('');
-    const [userId, setUserId] = useState(() => {
-        const saved = localStorage.getItem('userId');
-        return saved ? parseInt(saved) : null;
-    });
-    const [score, setScore] = useState(() => {
-        const saved = localStorage.getItem('score');
-        return saved ? parseInt(saved) : 0;
-    });
-    const [userRole, setUserRole] = useState(() => {
-        const saved = localStorage.getItem('userRole');
-        return saved ? parseInt(saved) : 1;
-    });
+
+    // Auth state - Do not persist userId/score manually as socket session is lost on refresh
+    const [userId, setUserId] = useState(null);
+    const [score, setScore] = useState(0);
+    const [userRole, setUserRole] = useState(1);
     const [status, setStatus] = useState({ msg: '', type: '' });
 
     // Game State
@@ -50,6 +41,9 @@ export const useGameLogic = () => {
     const [allUsers, setAllUsers] = useState([]); // For admin panel
     const [selectedUserDetail, setSelectedUserDetail] = useState(null);
 
+    // Lifeline Help Overlay
+    const [helpOverlay, setHelpOverlay] = useState({ open: false, text: '' });
+
     // --- SOCKET HANDLERS ---
     useEffect(() => {
         // Poll rooms and leaderboard periodically
@@ -57,6 +51,10 @@ export const useGameLogic = () => {
             if (window.location.pathname === '/home') {
                 const p1 = new Uint8Array(1); p1[0] = OPS.GET_ROOMS;
                 socket.emit("client_to_server", p1);
+
+                // Also poll leaderboard
+                const p2 = new Uint8Array(1); p2[0] = 0x45; // MSG_GET_LEADERBOARD
+                socket.emit("client_to_server", p2);
             }
             else if (window.location.pathname === '/room') {
                 if (roomInfo.id !== null && roomInfo.id !== undefined) {
@@ -235,10 +233,11 @@ export const useGameLogic = () => {
             }
             else if (opcode === 0x2B) { // MSG_WALK_AWAY
                 const msg = textDecoder.decode(view.slice(1));
-                alert(msg);
-            } else if (opcode === 0x2D) { // MSG_HELP_RESULT
+                setHelpOverlay({ open: true, text: msg });
+            }
+            else if (opcode === 0x2D) { // MSG_HELP_RESULT
                 const msg = textDecoder.decode(view.slice(1));
-                alert(`Tư vấn trợ giúp:\n${msg}`);
+                setHelpOverlay({ open: true, text: msg });
             }
             else if (opcode === OPS.ROOM_LIST) {
                 const listStr = textDecoder.decode(view.slice(1));
@@ -515,14 +514,15 @@ export const useGameLogic = () => {
         state: {
             username, setUsername, password, setPassword,
             userId, score, status, userRole,
-            gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey,
+            gameStatus, setGameStatus, currentQuestion, timeLeft, gameResult, renderKey, currentGameScore,
             roomInfo, roomMembers, isHost,
             rooms, leaderboard,
             players, // Live scores during gameplay
             wrongAnswer, setWrongAnswer, // Mode 2: Dimming effect
             idleUsers, incomingInvite,
             setIncomingInvite, // Need this for dismissing manually
-            allUsers, selectedUserDetail, setSelectedUserDetail
+            allUsers, selectedUserDetail, setSelectedUserDetail,
+            helpOverlay, setHelpOverlay // Exported for UI
         },
         actions: {
             handleSubmit,
