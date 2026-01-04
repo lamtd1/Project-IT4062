@@ -64,14 +64,11 @@ const GameContent = () => {
     // Optimistic UI update
     setUsedLifelines(prev => ({ ...prev, [lifelineId]: true }));
 
-    // Send to server
-    const packet = new Uint8Array(1 + 1); // Opcode + 1 char for ID (roughly)
-    packet[0] = 0x2C; // MSG_USE_HELP from protocol.h matches? 0x2C is MSG_USE_HELP (44 decimal).
-    // Protocol defines payload as string.
+    // Send to server using OPS constant
     const encoder = new TextEncoder();
     const payload = encoder.encode(String(lifelineId));
     const fullPacket = new Uint8Array(1 + payload.length);
-    fullPacket[0] = 0x2C;
+    fullPacket[0] = OPS.USE_HELP;
     fullPacket.set(payload, 1);
 
     socket.emit('client_to_server', fullPacket);
