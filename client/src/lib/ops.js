@@ -1,4 +1,5 @@
 export const OPS = {
+    // --- AUTHENTICATION ---
     LOGIN: 0x01,
     REGISTER: 0x02,
     LOGIN_SUCCESS: 0x03,
@@ -7,42 +8,39 @@ export const OPS = {
     REGISTER_SUCCESS: 0x06,
     REGISTER_FAILED: 0x07,
     SERVER_FULL: 0x08,
+    LOGOUT: 0x09,
 
+    // --- ROOM MANAGEMENT ---
     ROOM_CREATE: 0x10,
     ROOM_JOIN: 0x11,
+    LEAVE_ROOM: 0x12, // Was 0x31
+    ROOM_LIST: 0x13,  // Was 0x28
+    GET_ROOMS: 0x14,  // Was 0x27
+    ROOM_DETAIL: 0x15, // Was 0x2A
+    GET_ROOM_DETAIL: 0x16, // Was 0x29
 
-    // Invitation Opcodes
-    GET_IDLE_USERS: 0x42,
-    IDLE_USERS_LIST: 0x43,
-    INVITE_FRIEND: 0x47,
-    INVITE_RECEIVED: 0x48,
-
-    LOGOUT: 0x30,
-    LEAVE_ROOM: 0x31,
-
-    GET_ROOMS: 0x27,
-    ROOM_LIST: 0x28,
-    GET_ROOM_DETAIL: 0x29,
-    ROOM_DETAIL: 0x2A,
-
-    GET_LEADERBOARD: 0x45,
-    LEADERBOARD_LIST: 0x46,
-
-    REFRESH_USER_INFO: 0x60,  // Request updated user info
-    USER_INFO_UPDATE: 0x61,    // Server response with updated info
-
-    // Game Opcodes
+    // --- GAMEPLAY ---
     GAME_START: 0x20,
     QUESTION: 0x21,
     ANSWER: 0x22,
     ANSWER_RESULT: 0x23,
+    GAME_END: 0x24,
     SCORE_UPDATE: 0x25,
-    GAME_END: 0x26,
-    WALK_AWAY: 0x2B,
-    USE_HELP: 0x2C,
-    HELP_RESULT: 0x2D,
+    WALK_AWAY: 0x26,
+    USE_HELP: 0x27,
+    HELP_RESULT: 0x28,
 
-    // Admin Opcodes
+    // --- SOCIAL & INFO ---
+    GET_ONLINE_USERS: 0x40,
+    GET_IDLE_USERS: 0x42,
+    IDLE_USERS_LIST: 0x43,
+    INVITE_RECEIVED: 0x44,
+    GET_LEADERBOARD: 0x45,
+    LEADERBOARD_LIST: 0x46,
+    INVITE_FRIEND: 0x47,
+
+
+    // --- ADMIN ---
     GET_ALL_USERS: 0x50,
     ALL_USERS_RESULT: 0x51,
     DELETE_USER: 0x52,
@@ -50,7 +48,11 @@ export const OPS = {
     GET_USER_DETAIL: 0x54,
     USER_DETAIL_RESULT: 0x55,
 
-    // Game History
+    // --- USER DATA ---
+    REFRESH_USER_INFO: 0x60,
+    USER_INFO_UPDATE: 0x61,
+
+    // --- HISTORY ---
     GET_GAME_HISTORY: 0x70,
     GAME_HISTORY_RESPONSE: 0x71,
     GET_QUESTIONS_BY_IDS: 0x72,

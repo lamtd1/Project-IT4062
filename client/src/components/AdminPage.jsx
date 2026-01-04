@@ -37,9 +37,8 @@ const AdminPage = ({
                     </div>
                     <button
                         onClick={onLogout}
-                        className="px-4 py-2 bg-white hover:bg-gray-100 border-2 border-gray-300 rounded-lg transition"
                     >
-                        Đăng xuấtđã</button>
+                        Đăng xuất</button>
                 </div>
 
                 {/* User Management Card */}
@@ -106,8 +105,8 @@ const AdminPage = ({
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span
                                                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${user.is_online
-                                                                ? 'bg-green-100 text-green-800'
-                                                                : 'bg-gray-100 text-gray-800'
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-800'
                                                             }`}
                                                     >
                                                         <span className={`w-2 h-2 rounded-full mr-2 ${user.is_online ? 'bg-green-500' : 'bg-gray-400'}`}></span>

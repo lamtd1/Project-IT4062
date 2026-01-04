@@ -53,7 +53,7 @@ export const useGameLogic = () => {
                 socket.emit("client_to_server", p1);
 
                 // Also poll leaderboard
-                const p2 = new Uint8Array(1); p2[0] = 0x45; // MSG_GET_LEADERBOARD
+                const p2 = new Uint8Array(1); p2[0] = OPS.GET_LEADERBOARD; // MSG_GET_LEADERBOARD
                 socket.emit("client_to_server", p2);
             }
             else if (window.location.pathname === '/room') {
@@ -93,7 +93,8 @@ export const useGameLogic = () => {
                 localStorage.setItem('userRole', role.toString());
 
                 setStatus({ msg: "Đăng nhập thành công!", type: 'success' });
-                setTimeout(() => navigate(role === 0 ? '/admin' : '/home'), 500);
+                // Navigate immediately using the role from server response (not state)
+                setTimeout(() => navigate(role === 0 ? '/admin' : '/home'), 100);
             }
             else if (opcode === OPS.LOGIN_FAILED) {
                 setStatus({ msg: "Sai tài khoản hoặc mật khẩu!", type: 'error' });
@@ -133,7 +134,7 @@ export const useGameLogic = () => {
             }
 
             // --- GAME RESPONSES ---
-            else if (opcode === 0x21) { // MSG_QUESTION
+            else if (opcode === OPS.QUESTION) { // MSG_QUESTION
                 const payload = textDecoder.decode(view.slice(1));
                 const parts = payload.split('|');
                 if (parts.length >= 7) {
@@ -151,7 +152,7 @@ export const useGameLogic = () => {
                     setRenderKey(prev => prev + 1);
                 }
             }
-            else if (opcode === 0x23) { // MSG_ANSWER_RESULT
+            else if (opcode === OPS.ANSWER_RESULT) { // MSG_ANSWER_RESULT
                 const payload = textDecoder.decode(view.slice(1));
 
                 // Parse extended protocol: "message|eliminated:0/1|wrong_answer:0/1"
@@ -218,7 +219,7 @@ export const useGameLogic = () => {
                     console.log('[SCORE_UPDATE]', playerList);
                 }
             }
-            else if (opcode === 0x26) { // MSG_GAME_END
+            else if (opcode === OPS.GAME_END) { // MSG_GAME_END
                 const payload = textDecoder.decode(view.slice(1));
                 setGameStatus('FINISHED');
                 setGameResult(payload);
@@ -231,11 +232,15 @@ export const useGameLogic = () => {
                     console.log('[USER_INFO] Requested refresh on GAME_END');
                 }
             }
-            else if (opcode === 0x2B) { // MSG_WALK_AWAY
+            else if (opcode === OPS.WALK_AWAY) { // MSG_WALK_AWAY
                 const msg = textDecoder.decode(view.slice(1));
-                setHelpOverlay({ open: true, text: msg });
+                // Show "Concluded" screen instead of Help Overlay
+                setGameStatus('FINISHED');
+                setGameResult(`BẠN ĐÃ DỪNG CUỘC CHƠI\n\n${msg}`);
+                setHelpOverlay({ open: false, text: '' });
+                setCurrentQuestion(null);
             }
-            else if (opcode === 0x2D) { // MSG_HELP_RESULT
+            else if (opcode === OPS.HELP_RESULT) { // MSG_HELP_RESULT
                 const msg = textDecoder.decode(view.slice(1));
                 setHelpOverlay({ open: true, text: msg });
             }
@@ -264,6 +269,12 @@ export const useGameLogic = () => {
                 const newScore = parseInt(payload || '0');
                 setScore(newScore);
                 console.log('[USER_INFO] Updated total_score:', newScore);
+
+                // Auto-refresh leaderboard to sync with new score
+                const refreshPacket = new Uint8Array(1);
+                refreshPacket[0] = OPS.GET_LEADERBOARD;
+                socket.emit('client_to_server', refreshPacket);
+                console.log('[USER_INFO] Requested leaderboard refresh for sync');
             }
 
             else if (opcode === OPS.ROOM_DETAIL) {
@@ -353,6 +364,7 @@ export const useGameLogic = () => {
 
     // --- ACTION HANDLERS ---
     const handleSubmit = (opcode) => {
+        console.log('[DEBUG] handleSubmit called with opcode:', opcode, 'Username:', username, 'Password:', password);
         if (!username || !password) return setStatus({ msg: "Nhập đủ thông tin", type: 'error' });
         const text = `${username} ${password}`;
         const encoder = new TextEncoder();
@@ -396,6 +408,7 @@ export const useGameLogic = () => {
     };
 
     const handleLogout = () => {
+        console.log('[DEBUG] handleLogout called. Clearing state and storage.');
         const packet = new Uint8Array(1);
         packet[0] = OPS.LOGOUT;
         socket.emit("client_to_server", packet);
@@ -409,6 +422,8 @@ export const useGameLogic = () => {
         // Reset state
         setUserId(null);
         setUsername('');
+        setPassword(''); // Also clear password
+        setStatus({ msg: '', type: '' }); // Clear status to prevent auto-redirect on login page
         setScore(0);
         setUserRole(1); // Assuming 1 is the default user role
         setGameStatus('LOBBY');
@@ -420,13 +435,13 @@ export const useGameLogic = () => {
     const handleGetLeaderboard = () => {
         if (!socket) return;
         const packet = new Uint8Array(1);
-        packet[0] = 0x45;
+        packet[0] = OPS.GET_LEADERBOARD;
         socket.emit("client_to_server", packet);
     };
 
     const handleStartGame = () => {
         const packet = new Uint8Array(1);
-        packet[0] = 0x20;
+        packet[0] = OPS.GAME_START;
         socket.emit("client_to_server", packet);
         console.log("Sent GAME_START to server");
     };
@@ -435,7 +450,7 @@ export const useGameLogic = () => {
         const encoder = new TextEncoder();
         const bytes = encoder.encode(ansChar);
         const packet = new Uint8Array(1 + bytes.length);
-        packet[0] = 0x22;
+        packet[0] = OPS.ANSWER;
         packet.set(bytes, 1);
         socket.emit("client_to_server", packet);
     };

@@ -208,11 +208,17 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
 
 // Kiểm tra user đã online chưa
 int is_user_online(char *username) {
+    printf("[DEBUG] Checking if user '%s' is online...\n", username);
     for (int i = 0; i < MAX_CLIENTS + 1; i++){
-        if(sessions[i].is_logged_in && strcmp(sessions[i].username, username) == 0) {
-            return 1;
+        if (sessions[i].is_logged_in) {
+            printf("[DEBUG] Slot %d: %s (online)\n", i, sessions[i].username);
+            if (strcmp(sessions[i].username, username) == 0) {
+                 printf("[DEBUG] User '%s' found online at slot %d!\n", username, i);
+                 return 1;
+            }
         }
     }
+    printf("[DEBUG] User '%s' is NOT online.\n", username);
     return 0;
 }
 

@@ -168,6 +168,9 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
     
     r->player_count++; // Tăng số lượng người chơi
     
+    printf("[ROOM] DEBUG: room_join called for UserID %d. Received Username: '%s'\n", user_id, username);
+    printf("[ROOM] DEBUG: Stored member username: '%s'\n", r->members[idx].username);
+
     printf("[ROOM] User %s joined Room %d\n", username, room_id);
     return 1; // Thành công
 }

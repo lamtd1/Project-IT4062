@@ -11,7 +11,19 @@ import CreateRoomPanel from './CreateRoomPanel';
 import Leaderboard from './Leaderboard';
 import GameHistory from './GameHistory';
 
-const HomePage = ({ username, userId, score, socket, onLogout, onCreateRoom, onJoinRoom, rooms, leaderboard, onRequestLeaderboard }) => {
+const HomePage = ({
+  username,
+  userId,
+  score,
+  socket,
+  onLogout,
+  onCreateRoom,
+  onJoinRoom,
+  rooms = [],
+  leaderboard = [],
+  onRequestLeaderboard
+}) => {
+  console.log('[HomePage] Mounting...', { username, userId, roomsCount: rooms?.length, leaderboardCount: leaderboard?.length });
   const [showHistory, setShowHistory] = useState(false);
 
   return (

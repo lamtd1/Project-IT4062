@@ -126,9 +126,9 @@ void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char*
         }
     }
     if (target_fd != -1) {
-        // 3. Gửi lời mời: [0x48] "SenderName:RoomID"
+        // 3. Gửi lời mời: [0x44] "SenderName:RoomID"
         char buffer[BUFFER_SIZE];
-        buffer[0] = MSG_INVITE_RECEIVED; // 0x48
+        buffer[0] = MSG_INVITE_RECEIVED; // 0x44
         
         // Format payload: SenderName:RoomID
         sprintf(buffer + 1, "%s:%d", sender_name, r->id);
@@ -419,6 +419,7 @@ int main(){
                                 resp[2] = 0;
                                 printf("Create room failed for %s. Code: %d\n", sessions[i].username, r_id);
                             }
+                            printf("[MAIN] DEBUG: Created room. Session Username: '%s'\n", sessions[i].username);
                             send_with_delimiter(sd, resp, 3);
                             break;
                         }
@@ -426,6 +427,8 @@ int main(){
                         case MSG_ROOM_JOIN: {
                             int r_id = atoi(payload);
                             int res = room_join(r_id, sessions[i].user_id, sessions[i].username, sd);
+                            printf("[MAIN] DEBUG: User %d joining room. Session Username: '%s'\n", sessions[i].user_id, sessions[i].username);
+
                             char resp[2];
                             if (res == 1) {
                                 resp[0] = MSG_ROOM_JOIN;
@@ -440,7 +443,7 @@ int main(){
                             break;
                         }
 
-                        case MSG_LEAVE_ROOM: {
+                        case MSG_ROOM_LEAVE: {
                            room_leave(sessions[i].user_id);
                            printf("User %s left room request.\n", sessions[i].username);
                            // Gửi lại confirm? Tuỳ protocol, tạm thời ko cần
