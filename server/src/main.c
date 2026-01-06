@@ -140,6 +140,16 @@ void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char*
 }
 
 int main(){
+    if (freopen("../../logs/server_history.txt", "a", stdout) == NULL) {
+        perror("Không thể chuyển hướng stdout");
+    }
+    if (freopen("../../logs/server_history.txt", "a", stderr) == NULL) {
+        perror("Không thể chuyển hướng stderr");
+    }
+    // Thiết lập line buffering để log được ghi theo thời gian thực
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IOLBF, 0);
+
     sqlite3 *db = db_init("../../database/database.db");
     if(!db) {
         fprintf(stderr, "Failed to connect to database\n");
@@ -276,7 +286,6 @@ int main(){
 
                     close(sd);
                     fds[i].fd = -1;
-                }
                 } else if (valread > 0) {
                     buffer[valread] = '\0';
                     unsigned char opcode = buffer[0];
@@ -284,7 +293,6 @@ int main(){
 
                     // Just print for debug
                     if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == 0x60) {
-                         // Don't print payload for these to avoid confusion
                          printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
                     } else {
                          printf("Client %d sent OpCode: %02x, Payload: %s\n", sd, opcode, payload);
