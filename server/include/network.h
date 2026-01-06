@@ -28,7 +28,7 @@ int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload);
 int is_user_online(char *username);
 
 // Mảng sessions toàn cục (định nghĩa trong main.c)
-#define MAX_CLIENTS 10
+#define MAX_CLIENTS 100
 extern Session sessions[MAX_CLIENTS + 1];
 
 #endif // NETWORK_H

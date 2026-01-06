@@ -15,7 +15,6 @@
 #include "network.h"
 
 #define BUFFER_SIZE 4096
-#define MAX_CLIENTS 10 
 #define PORT 8080
 
 
