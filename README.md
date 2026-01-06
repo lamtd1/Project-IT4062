@@ -59,6 +59,37 @@ npm run dev          # Chạy dev server
 
 ---
 
+## 🌐 Hướng dẫn chơi Multiplayer (LAN)
+
+Để chơi cùng bạn bè trong cùng một mạng Wi-Fi/LAN, hãy thực hiện các bước sau:
+
+### 1. Tìm địa chỉ IP máy chủ (Máy của bạn)
+Mở Terminal và chạy lệnh:
+- **MacOS:** `ipconfig getifaddr en0`
+- **Windows:** `ipconfig` (Tìm dòng *IPv4 Address* của card mạng đang dùng)
+- **Linux:** `hostname -I`
+
+*Giả sử IP máy bạn là: `172.18.39.119`*
+
+### 2. Cấu hình Client
+Mở file `client/.env` và cập nhật địa chỉ IP vừa tìm được:
+```env
+VITE_MIDDLEWARE_URL=http://172.18.39.119:4000
+```
+
+### 3. Chạy Client ở chế độ Public
+Tại terminal của Client, bắt buộc phải dùng flag `--host`:
+```bash
+cd client
+npm run dev -- --host
+```
+
+### 4. Chia sẻ link cho bạn bè
+Sau khi chạy lệnh trên, Vite sẽ hiển thị một địa chỉ Network, ví dụ: `http://172.18.39.119:5173`.
+Hãy gửi link này cho bạn bè để họ truy cập từ trình duyệt của họ.
+
+---
+
 ## 🎮 Tính năng chính
 
 ### 1. Hệ thống người dùng
@@ -235,6 +266,11 @@ sudo apt-get install libsqlite3-dev
 - Kiểm tra middleware đã chạy chưa
 - Clear cache browser (Ctrl+Shift+R)
 - Check Console (F12) xem lỗi
+
+**Không kết nối được từ máy khác:**
+- Kiểm tra 2 máy có cùng mạng Wi-Fi không (LAN).
+- Kiểm tra Firewall trên máy chủ (Tắt hoặc cho phép các cổng 8080, 4000, 5173).
+- Đảm bảo đã chạy Client với flag `--host`.
 
 ---
 

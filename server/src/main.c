@@ -211,10 +211,6 @@ int main(){
         }
 
         // --- GAME LOOP TIMER UPDATE ---
-        // NOTE: Disabled for single-player classic mode
-        // Questions now advance immediately when user answers correctly
-        // This timer logic can be re-enabled for multiplayer modes
-        /*
         for (int r = 0; r < MAX_ROOMS; r++) {
              // room_update_timer trả về: 0 (ko đổi/ko playing), 1 (Next Q), 2 (End)
              int status = room_update_timer(r);
@@ -224,7 +220,6 @@ int main(){
                  broadcast_end_game(r, db);
              }
         }
-        */
         // ------------------------------
 
         // Kiểm tra socket server & kiểm tra cờ POLLIN được bật
@@ -269,6 +264,11 @@ int main(){
                 if(valread == 0){
                     printf("Client %d (fd=%d) disconnected.\n", i, sd);
 
+                    // Tự động rời phòng nếu đang trong phòng
+                    if (sessions[i].user_id > 0) {
+                        room_leave(sessions[i].user_id);
+                    }
+
                     sessions[i].is_logged_in = 0;
                     strcpy(sessions[i].username, "");
                     sessions[i].socket_fd = -1;
@@ -276,8 +276,7 @@ int main(){
 
                     close(sd);
                     fds[i].fd = -1;
-
-                // Read > 0 -> Client gửi tín hiệu
+                }
                 } else if (valread > 0) {
                     buffer[valread] = '\0';
                     unsigned char opcode = buffer[0];

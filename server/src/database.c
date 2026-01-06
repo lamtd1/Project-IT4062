@@ -105,7 +105,7 @@ void get_questions(sqlite3* db, int difficulty, int limit) {
 }
 
 int save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *log) {
-    char sql[512];
+    char sql[8192];
     char *err = 0;
     sprintf(sql, "INSERT INTO game_history (room_name, winner_id, game_mode, log_data) VALUES ('%s', %d, %d, '%s');", room, winner_id, game_mode, log);
     if (sqlite3_exec(db, sql, 0, 0, &err) == SQLITE_OK) {
