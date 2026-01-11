@@ -10,7 +10,7 @@
 #include "../include/protocol.h"
 
 // --- KHAI BÁO CÁC HÀM TỪ GAME.C ---
-// Các hàm trợ giúp từ module game
+
 extern void get_5050_options(Question *q, char *out_str);
 extern void get_audience_stats(Question *q, char *out_str);
 extern void get_phone_friend_response(Question *q, char *out_str);
@@ -47,7 +47,7 @@ void room_system_init(void *db_conn) {
  * @param user_id: ID của người tạo phòng
  * @param username: Tên người dùng
  * @param socket_fd: File descriptor của socket để giao tiếp
- * @param room_name: Tên phòng (có thể chứa game mode: "TenPhong:Mode")
+ * @param room_name: Tên phòng (chứa game mode: "TenPhong:Mode")
  * @return: Room ID nếu thành công, -1 nếu user đã ở phòng khác, -2 nếu server đầy
  * 
  * FLOW:
@@ -56,6 +56,7 @@ void room_system_init(void *db_conn) {
  * 3. Parse room_name để lấy tên và game mode
  * 4. Khởi tạo phòng với user làm host (member[0])
  */
+
 int room_create(int user_id, char *username, int socket_fd, char *room_name) {
     // KIỂM TRA: Nếu user đã ở phòng khác, tự động leave trước
     Room *existing = room_get_by_user(user_id);
@@ -69,8 +70,8 @@ int room_create(int user_id, char *username, int socket_fd, char *room_name) {
         if (rooms[i].id == -1) { // Phòng trống
             rooms[i].id = i; // Gán ID = index
             
-            // PARSE PAYLOAD: Format "TenPhong:Mode" hoặc chỉ "TenPhong"
-            // Ví dụ: "MyRoom:2" -> name="MyRoom", mode=2
+            // PARSE PAYLOAD: Format "TenPhong:Mode"
+            // "MyRoom:2" -> name="MyRoom", mode=2
             char *p = strchr(room_name, ':'); // Tìm dấu ':'
             if (p) {
                 *p = '\0'; // Cắt chuỗi tại vị trí ':'
@@ -168,8 +169,8 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
     
     r->player_count++; // Tăng số lượng người chơi
     
-    printf("[ROOM] DEBUG: room_join called for UserID %d. Received Username: '%s'\n", user_id, username);
-    printf("[ROOM] DEBUG: Stored member username: '%s'\n", r->members[idx].username);
+    printf("[ROOM]: room_join called for UserID %d. Received Username: '%s'\n", user_id, username);
+    printf("[ROOM]: Stored member username: '%s'\n", r->members[idx].username);
 
     printf("[ROOM] User %s joined Room %d\n", username, room_id);
     return 1; // Thành công
@@ -181,7 +182,7 @@ int room_join(int room_id, int user_id, char *username, int socket_fd) {
  * @return: 1 nếu thành công, 0 nếu lỗi
  * 
  * LOGIC:
- * - Nếu HOST rời -> kick tất cả members + reset phòng
+ * - Nếu HOST rời -> chuyển quyền host cho người thứ 2, game tiếp tục
  * - Nếu member thường rời -> chỉ xóa member đó
  * - Nếu phòng trống -> reset phòng
  */
@@ -201,7 +202,7 @@ int room_leave(int user_id) {
 
     if (idx != -1) {
         // TRƯỜNG HỢP 1: HOST THOÁT
-        // -> Chuyển quyền host cho người thứ 2, game/phòng tiếp tục
+        // -> Chuyển quyền host cho người thứ 2, game tiếp tục
         if (r->members[idx].is_host) {
             printf("[ROOM] Host %s left room %d.\n", 
                    r->members[idx].username, r->id);
@@ -299,7 +300,6 @@ int room_start_game(int room_id, int user_id) {
     // load_room_questions() sử dụng "ORDER BY RANDOM()" trong SQL
     if (load_room_questions(global_db, r->questions) < 15) {
         printf("[ERROR] Failed to load 15 questions for room %d\n", room_id);
-        // TODO: Xử lý lỗi tốt hơn (hiện tại vẫn tiếp tục)
     }
 
     // BẮT ĐẦU TIMER cho câu hỏi đầu tiên
@@ -360,9 +360,22 @@ int room_update_timer(int room_id) {
     // Tính thời gian đã trôi qua (giây)
     double elapsed = difftime(time(NULL), r->question_start_time);
     
+    // MODE 1: COOP - Timeout = Cả team thua (giống trả lời sai)
+    if (r->game_mode == MODE_COOP && elapsed > QUESTION_DURATION) {
+        printf("[COOP TIMEOUT] Room %d - Time's up! Team eliminated.\n", room_id);
+        
+        // Đánh dấu tất cả là eliminated (giống logic trả lời sai)
+        for (int i = 0; i < r->player_count; i++) {
+            r->members[i].is_eliminated = 1;
+        }
+        
+        r->status = ROOM_FINISHED;
+        return 2; // Game Over - trigger broadcast_end_game
+    }
+    
     // MODE 2: Timeout handling (30s)
     if (r->game_mode == MODE_SCORE_ATTACK && elapsed > 30) {
-        // Auto-mark unanswered players as wrong
+        // Quá thời gian thì tự động là sai
         int any_auto_answered = 0;
         for (int i = 0; i < r->player_count; i++) {
             if (!r->members[i].is_eliminated && !r->members[i].has_answered) {
@@ -372,11 +385,11 @@ int room_update_timer(int room_id) {
             }
         }
         
-        // If we auto-answered anyone, check if all now answered
+        // Sau khi trả lời auto -> Kiểm tra xem tất cả đã trả lời chưa
         if (any_auto_answered && all_players_answered(r->id)) {
-            // Advance to next question
+            // Chuyển sang câu hỏi tiếp theo
             r->current_question_idx++;
-            reset_answer_flags(r->id);
+            reset_answer_flags(r->id); // Cho mode 2
             
             if (r->current_question_idx >= 15) {
                 r->status = ROOM_FINISHED;
@@ -388,16 +401,14 @@ int room_update_timer(int room_id) {
         }
     }
     
-    // MODE 0 & 1: Standard timeout (30s) - obsolete with new logic but keep for safety
-    if (elapsed > QUESTION_DURATION) {
-        // Chuyển sang câu hỏi tiếp theo
+    // MODE 0: Timeout bình thường (30s) - chỉ chuyển câu
+    if (r->game_mode == MODE_CLASSIC && elapsed > QUESTION_DURATION) {
         r->current_question_idx++;
-        r->question_start_time = time(NULL); // Reset timer
+        r->question_start_time = time(NULL);
         
-        // KIỂM TRA KẾT THÚC GAME
         if (r->current_question_idx >= 15) {
             r->status = ROOM_FINISHED;
-            return 2; // Game Over
+            return 2;
         }
         
         return 1; // Chuyển câu hỏi
@@ -442,7 +453,7 @@ int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_
     Question *q = &r->questions[r->current_question_idx];
 
     // XỬ LÝ THEO LOẠI TRỢ GIÚP
-    // Cờ để kiểm tra xem đã dùng chưa (trỏ tới biến phù hợp)
+    // Cờ để kiểm tra xem đã dùng chưa
     int *flag_used = NULL;
     
     if (r->game_mode == MODE_COOP) {
@@ -460,16 +471,16 @@ int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_
     }
     
     if (flag_used == NULL) {
-         strcpy(result_msg, "Loai tro giup khong hop le.");
+         strcpy(result_msg, "Loại trợ giúp không hợp lệ.");
          return -1;
     }
     
     // Kiểm tra và đánh dấu
     if (*flag_used == 1) {
         if (r->game_mode == MODE_COOP) {
-            strcpy(result_msg, "Quyen tro giup nay da duoc dong doi su dung!");
+            strcpy(result_msg, "Quyền trợ giúp này đã được sử dụng!");
         } else {
-            strcpy(result_msg, "Ban da su dung quyen nay roi!");
+            strcpy(result_msg, "Bạn đã sử dụng quyền trợ giúp này rồi!");
         }
         return 1; // Handled but denied
     }
@@ -489,8 +500,7 @@ int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_
     else if (lifeline_type == 4) {
         get_expert_advice(q, result_msg);
     } 
-    
-    return 1;
+
     return 1;
 }
 
@@ -583,7 +593,7 @@ void room_get_detail_string(int room_id, char *buffer) {
 int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
-        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        strcpy(result_msg, "Lỗi: phòng không chơi hoặc bạn chưa vào phòng.");
         return -1;
     }
     
@@ -597,7 +607,7 @@ int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
     }
     
     if (idx == -1 || r->members[idx].is_eliminated) {
-        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        strcpy(result_msg, "Bạn đã bị loại hoặc không trong phòng.");
         return 0;
     }
     
@@ -621,7 +631,7 @@ int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
         // Đúng: Ghi đè điểm theo level
         int prize = get_prize_for_level(current_level);
         r->members[idx].score = prize;
-        sprintf(result_msg, "CHINH XAC! Ban dang o muc cau hoi %d. Tien: %d. Tong: %d", 
+        sprintf(result_msg, "Đúng rồi! Bạn đang ở mức câu hỏi %d. Tiền: %d. Tổng: %d", 
                 current_level, prize, r->members[idx].score);
         broadcast_scores(r->id);
         return 1; // Đúng
@@ -630,7 +640,7 @@ int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
         int safe_money = calculate_safe_reward(current_level);
         r->members[idx].score = safe_money;
         r->members[idx].is_eliminated = 1;
-        sprintf(result_msg, "SAI ROI! Ra ve voi so tien: %d. Tong: %d", safe_money, r->members[idx].score);
+        sprintf(result_msg, "Sai rồi! Bạn bị loại, tiền an toàn: %d. Tổng: %d", safe_money, r->members[idx].score);
         broadcast_scores(r->id);
         return 2; // Bị loại
     }
@@ -648,7 +658,7 @@ int room_handle_answer_practice(int user_id, char *answer, char *result_msg) {
 int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
-        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        strcpy(result_msg, "Lỗi: phòng không chơi hoặc bạn chưa vào phòng.");
         return -1;
     }
     
@@ -662,7 +672,7 @@ int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
     }
     
     if (idx == -1 || r->members[idx].is_eliminated) {
-        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        strcpy(result_msg, "Lỗi: Bạn đã bị loại hoặc không trong phòng.");
         return 0;
     }
     
@@ -690,7 +700,7 @@ int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
         int diff = prize - prev_prize;
         
         r->members[idx].score += diff;
-        sprintf(result_msg, "CHINH XAC! Dong doi da dua ca doi len cau hoi ke tiep. (+%d diem)", diff);
+        sprintf(result_msg, "CHÍNH XÁC: Đồng đội đã đưa cả đội lên câu hỏi tiếp theo (+%d điểm)", diff);
         broadcast_scores(r->id);
         
         printf("[COOP] Player %s correct → Team advances\n", r->members[idx].username);
@@ -705,7 +715,7 @@ int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
             r->members[i].is_eliminated = 1;
         }
 
-        sprintf(result_msg, "SAI ROI! Ca doi da bi loai tai cau so %d. Game Over!", current_level);
+        sprintf(result_msg, "SAI RỒI! Cả đội đã bị loại tại câu số %d. Game Over!", current_level);
         broadcast_scores(r->id);
         
         // Return 2 để trigger broadcast_end_game
@@ -725,7 +735,7 @@ int room_handle_answer_coop(int user_id, char *answer, char *result_msg) {
 int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
-        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        strcpy(result_msg, "Lỗi: phòng không chơi hoặc bạn chưa vào phòng.");
         return -1;
     }
     
@@ -739,13 +749,13 @@ int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) 
     }
     
     if (idx == -1 || r->members[idx].is_eliminated) {
-        strcpy(result_msg, "Ban da bi loai hoac khong trong phong.");
+        strcpy(result_msg, "Lỗi: Bạn đã bị loại hoặc không trong phòng.");
         return 0;
     }
     
     // Check if already answered
     if (r->members[idx].has_answered) {
-        strcpy(result_msg, "Ban da tra loi cau nay roi!");
+        strcpy(result_msg, "Lỗi: Bạn đã trả lời câu này rồi!");
         return 0;
     }
     
@@ -780,7 +790,7 @@ int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) 
         int total = diff + (time_bonus * 10);
         r->members[idx].score += total;
         
-        sprintf(result_msg, "CHINH XAC! +%d diem (base: %d, bonus: %d). Tong: %d", 
+        sprintf(result_msg, "CHÍNH XÁC! +%d điểm (base: %d, bonus: %d). Tổng: %d", 
                 total, diff, time_bonus * 10, r->members[idx].score);
         broadcast_scores(r->id);
         
@@ -792,7 +802,7 @@ int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) 
         return 1; // Correct, waiting for others
     } else {
         // Sai: Không loại, không điểm
-        sprintf(result_msg, "SAI ROI! Ban khong duoc diem. Tong: %d|eliminated:0|wrong_answer:1", r->members[idx].score);
+        sprintf(result_msg, "SAI ROI! Bạn không được điểm. Tổng: %d", r->members[idx].score);
         broadcast_scores(r->id);
         
         // Check if all answered
@@ -815,7 +825,7 @@ int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg) 
 int room_handle_answer(int user_id, char *answer, char *result_msg) {
     Room *r = room_get_by_user(user_id);
     if (!r || r->status != ROOM_PLAYING) {
-        strcpy(result_msg, "Loi: Phong khong choi hoac ban chua vao phong.");
+        strcpy(result_msg, "Lỗi: phòng không chơi hoặc bạn chưa vào phòng.");
         return -1;
     }
     
@@ -830,7 +840,7 @@ int room_handle_answer(int user_id, char *answer, char *result_msg) {
         default: break;
     }
     
-    strcpy(result_msg, "Loi: Che do khong hop le.");
+    strcpy(result_msg, "Lỗi: Chế độ không hợp lệ.");
     return -1;
 }
 
@@ -868,10 +878,8 @@ int room_walk_away(int user_id, char *result_msg) {
     r->members[idx].is_eliminated = 1; // Đánh dấu không chơi nữa
     
     int final_score = r->members[idx].score;
-    
-    // Stats will be saved in broadcast_end_game with correct game_id
 
-    sprintf(result_msg, "Ban da dung cuoc choi. Tong tien thuong: %d", final_score);
+    sprintf(result_msg, "Bạn đã dừng cuộc chơi. Tổng tiền thưởng: %d", final_score);
     
     // Broadcast score update one last time
     broadcast_scores(r->id);
@@ -1004,45 +1012,40 @@ int room_all_eliminated(int room_id) {
     return (active_players == 0) ? 1 : 0;
 }
 
-/**
- * Xóa người chơi khỏi phòng (Mode 1 - Elimination)
- * Dùng khi player bị loại → Xóa khỏi members array
- * Transfer host nếu player bị loại là host
- */
-void room_remove_player(int room_id, int user_id) {
-    Room *r = room_get_by_id(room_id);
-    if (!r) return;
+// void room_remove_player(int room_id, int user_id) {
+//     Room *r = room_get_by_id(room_id);
+//     if (!r) return;
     
-    // Find player index
-    int idx = -1;
-    for (int i = 0; i < r->player_count; i++) {
-        if (r->members[i].user_id == user_id) {
-            idx = i;
-            break;
-        }
-    }
+//     // Find player index
+//     int idx = -1;
+//     for (int i = 0; i < r->player_count; i++) {
+//         if (r->members[i].user_id == user_id) {
+//             idx = i;
+//             break;
+//         }
+//     }
     
-    if (idx == -1) return; // Player not found
+//     if (idx == -1) return; // Player not found
     
-    // Check if player is host
-    int was_host = r->members[idx].is_host;
+//     // Check if player is host
+//     int was_host = r->members[idx].is_host;
     
-    // Shift remaining players down
-    for (int i = idx; i < r->player_count - 1; i++) {
-        r->members[i] = r->members[i + 1];
-    }
+//     // Shift remaining players down
+//     for (int i = idx; i < r->player_count - 1; i++) {
+//         r->members[i] = r->members[i + 1];
+//     }
     
-    // Decrease count
-    r->player_count--;
+//     // Decrease count
+//     r->player_count--;
     
-    // Transfer host to first player if needed
-    if (was_host && r->player_count > 0) {
-        r->members[0].is_host = 1;
-        printf("[ROOM] Host transferred to %s\n", r->members[0].username);
-    }
+//     // Transfer host to first player if needed
+//     if (was_host && r->player_count > 0) {
+//         r->members[0].is_host = 1;
+//         printf("[ROOM] Host transferred to %s\n", r->members[0].username);
+//     }
     
-    printf("[ROOM] Player removed. Room %d now has %d players\n", room_id, r->player_count);
-}
+//     printf("[ROOM] Player removed. Room %d now has %d players\n", room_id, r->player_count);
+// }
 
 /**
  * Kiểm tra xem tất cả người chơi đã trả lời câu hiện tại (Mode 2)

@@ -4,50 +4,60 @@
 #include <sqlite3.h>
 #include "game.h"
 
-// Helper: Trộn mảng ID câu hỏi
-void shuffle_questions(int *array, int count) {
-    if (count > 1) {
-        for (int i = 0; i < count - 1; i++) {
-            int j = i + rand() / (RAND_MAX / (count - i) + 1);
-            int t = array[j];
-            array[j] = array[i];
-            array[i] = t;
-        }
-    }
-}
-
+// Mảng chứa tất cả câu hỏi được load từ db
 Question all_questions[MAX_QUESTIONS_LOAD];
+// Đánh số bao nhiêu câu đã lưu - biến phụ này sau dùng nhiều ở các hàm khác
 int total_questions_loaded = 0;
 
+
+// LoadCtx: Mảng câu hỏi + count: để biết load câu bao nhiêu rồi
 typedef struct {
     Question *q_array;
     int *count;
 } LoadCtx;
 
+
+
+// Hàm helper để load hết câu hỏi từ db trc vào mảng 
 static int load_cb(void *data, int argc, char **argv, char **axColName ) {
+    // ctx: Mảng câu hỏi + count: để biết load câu bao nhiêu rồi
     LoadCtx *ctx = (LoadCtx *)data;
+    // Nếu đã load đủ câu hỏi thì dừng
     if (*ctx->count >= MAX_QUESTIONS_LOAD) return 1;
+    // Gán đầu mảng câu hỏi vào mảng q
     Question *q = &ctx->q_array[*ctx->count];
 
+    // Bóc id ra
     q->id = atoi(argv[0]);
+    // Bóc độ khó ra
     q->difficulty = atoi(argv[1]);
+    // Bóc nội dung ra
     strncpy(q->content, argv[2] ? argv[2] : "", sizeof(q->content));
+    // Bóc từng câu trả lời ra
     for (int i = 0; i < 4; i++) {
         strncpy(q->options[i], argv[i + 3] ? argv[i + 3] : "", sizeof(q->options[i]));
     }
+    // Bóc đáp án đúng ra
     strncpy(q->correct_answer, argv[7] ? argv[7] : "", sizeof(q->correct_answer));
+    // Đẩy count lên để đi tiếp câu mới
     (*ctx->count)++;
     return 0;
 }
 
+// Bắt đầu game
 int game_init(void *db_conn) {
+    // Khởi tạo db
     sqlite3 *db = (sqlite3 *)db_conn;
+    // Số câu hỏi load = 0
     total_questions_loaded = 0;
+    // gán loadctx vào mảng all_question & biến total_question_load để bắt đầu load hết câu hỏi
     LoadCtx ctx = {all_questions, &total_questions_loaded};
     
+
     const char *sql = "SELECT id, difficulty, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions;";
     
     char *err = 0;
+    // Load câu hỏi dùng hàm helper load_cb, lưu vào mảng ctx
     int rc = sqlite3_exec(db, sql, load_cb, &ctx, &err);
     
     if (rc != SQLITE_OK) {
@@ -57,10 +67,11 @@ int game_init(void *db_conn) {
     }
     
     printf("[GAME] Successfully loaded %d questions from DB.\n", total_questions_loaded);
+    // Load thành công toàn bộ câu hỏi
     return total_questions_loaded;
 }
 
-
+// Trả câu hỏi trong all_questions theo id / ko thì NULL stddef
 Question* get_question_by_id(int id) {
     for (int i = 0; i < total_questions_loaded; i++) {
         if (all_questions[i].id == id) return &all_questions[i];
@@ -68,7 +79,8 @@ Question* get_question_by_id(int id) {
     return NULL;
 }
 
-// --- REFACTORED FOR SQL RANDOM SELECTION ---
+// RoomLoadCtx: Mảng câu hỏi + current_count: để biết load câu bao nhiêu rồi
+// limit: giới hạn 15 câu mỗi phòng - thay đổi đc
 
 typedef struct {
     Question *target_array;
@@ -76,24 +88,33 @@ typedef struct {
     int limit;
 } RoomLoadCtx;
 
+// Hàm helper để load câu hỏi vào mảng target_array - cho từng phòng load 15 câu hỏi
 static int room_load_cb(void *data, int argc, char **argv, char **axColName ) {
     RoomLoadCtx *ctx = (RoomLoadCtx *)data;
-    if (*ctx->current_count >= ctx->limit) return 1; // Stop if full
+    // Load đủ 15 câu thì dừng
+    if (*ctx->current_count >= ctx->limit) return 1;
     
+    // Gán đầu mảng câu hỏi vào biến q
     Question *q = &ctx->target_array[*ctx->current_count];
     
+    // Tách id ra
     q->id = atoi(argv[0]);
+    // Tách độ khó ra
     q->difficulty = atoi(argv[1]);
+    // Tách câu hỏi ra
     strncpy(q->content, argv[2] ? argv[2] : "", sizeof(q->content));
+    // Tách từng câu trả lời và nội dung
     for (int i = 0; i < 4; i++) {
         strncpy(q->options[i], argv[i + 3] ? argv[i + 3] : "", sizeof(q->options[i]));
     }
+    // Tác đáp án đúng ra
     strncpy(q->correct_answer, argv[7] ? argv[7] : "", sizeof(q->correct_answer));
-    
+    // Dịch lên đáp án tiếp theo
     (*ctx->current_count)++;
     return 0;
 }
 
+// Load câu hỏi vào các phòng từ database - lấy random trực tiếp luôn
 int load_room_questions(void *db_conn, Question *room_questions) {
     sqlite3 *db = (sqlite3 *)db_conn;
     int count = 0;
@@ -130,7 +151,7 @@ int load_room_questions(void *db_conn, Question *room_questions) {
 int calculate_score(Question *q, char *user_ans, double time_taken) {
     if (!q) return 0;
 
-    // So sánh đáp án không phân biệt hoa thường
+    // So sánh đáp án - ký tự A, B, C, D
     if (strcasecmp(user_ans, q->correct_answer) == 0) {
         if (time_taken > QUESTION_DURATION) return 0; // Quá giờ coi như 0 điểm
         return 1; // CORRECT
@@ -145,6 +166,7 @@ void get_5050_options(Question *q, char *out_str) {
 
     int correct_idx = q->correct_answer[0] - 'A';
     int random_wrong;
+    // random ra đáp án ko cùng index với đáp án đúng -> 0, 1, 2, 3
     do { random_wrong = rand() % 4; } while (random_wrong == correct_idx);
 
     char c1 = 'A' + (correct_idx < random_wrong ? correct_idx : random_wrong);
@@ -179,7 +201,7 @@ void get_audience_stats(Question *q, char *out_str) {
              per[0], per[1], per[2], per[3]);
 }
 
-// 3. Logic Gọi người thân
+// 3. Logic Gọi người thân - Trả lời tỉ lệ trượt là 20%
 void get_phone_friend_response(Question *q, char *out_str) {
     if (!q) return;
     int coin = rand() % 100;

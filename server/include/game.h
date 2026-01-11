@@ -19,9 +19,6 @@ typedef struct {
 // Helper: Load 15 questions for a specific room (SQL RANDOM)
 int load_room_questions(void *db_conn, Question *room_questions);
 
-// Khởi tạo game (load câu hỏi - giữ lại để test hoặc bỏ)
-// int game_init(void *db_conn);
-
 // Kiểm tra đáp án (Case insensitive)
 int calculate_score(Question *q, char *user_ans, double time_taken);
 

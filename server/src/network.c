@@ -10,7 +10,7 @@
 #define BUFFER_SIZE 4096
 #define QUESTION_DURATION 30
 
-// Helper: Send message with delimiter to prevent TCP coalescing
+// Helper: Gửi message với đuôi \n để tránh dính message
 int send_with_delimiter(int socket_fd, const char *data, size_t len) {
     int ret = send(socket_fd, data, len, 0);
     if (ret >= 0) {
@@ -92,7 +92,7 @@ void reset_room_for_replay(Room *r) {
     r->end_broadcasted = 0;
     r->game_id = 0;
     
-    // Reset flags dùng chung (Coop Mode)
+    // Reset flags - trợ giúp dùng chung (Coop Mode)
     r->shared_help_5050_used = 0;
     r->shared_help_audience_used = 0;
     r->shared_help_phone_used = 0;
@@ -113,6 +113,7 @@ void reset_room_for_replay(Room *r) {
 }
 
 // Phát tín hiệu kết thúc game và lưu điểm vào DB
+// Quy định logic endgame
 void broadcast_end_game(int room_id, sqlite3 *db) {
     Room *r = room_get_by_id(room_id);
     if (!r) return;
@@ -143,6 +144,7 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
     
     // Mode multiplayer: Lưu lịch sử và điểm
     if (r->player_count > 1) {
+        // Lưu vào bảng game_history
         int game_id = save_history(db, r->name, winner_id, r->game_mode, r->game_log);
         r->game_id = game_id;
         printf("[DB] Game ID %d saved for room %d\n", game_id, r->id);
@@ -169,7 +171,7 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
             
             if (team_won) {
                 printf("[DB] COOP VICTORY! Updating total_win for all %d players.\n", r->player_count);
-                // Update total_win cho TẤT CẢ thành viên
+                // Update total_win cho TẤT CẢ thành viên trong users
                 for(int i=0; i<r->player_count; i++) {
                     update_user_win(db, r->members[i].user_id);
                 }
@@ -189,6 +191,7 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
                      winner_id = r->members[i].user_id;
                  }
              }
+            //  Update bảng users
              if (winner_id != 0) {
                  update_user_win(db, winner_id);
                  printf("[DB] Updated total_win for user ID %d\n", winner_id);
@@ -197,7 +200,9 @@ void broadcast_end_game(int room_id, sqlite3 *db) {
         
         // Lưu thống kê cho tất cả người chơi
         for (int i = 0; i < r->player_count; i++) {
+            // Lưu thông tin vào user-stats
             save_player_stat(db, r->members[i].user_id, r->game_id, r->members[i].score);
+            // Update tổng điểm trong users
             update_user_score(db, r->members[i].user_id, r->members[i].score);
             printf("[DB] Saved stats for user %d: score=%d\n", r->members[i].user_id, r->members[i].score);
         }
@@ -243,7 +248,7 @@ int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
     
     char response[64]; 
     
-    // Kiểm tra đã online chưa
+    // Kiểm tra đã online chưa - quản lý session - nếu trong mảng session.is_logged_in thì cảnh báo
     if(is_user_online(username)) {
         response[0] = MSG_ALREADY_LOGIN;
         send_with_delimiter(client_fd, response, 1);
@@ -252,6 +257,8 @@ int handle_login(sqlite3 *db, int client_fd, Session *s, char *payload) {
 
     // Xác thực user
     int user_id = verify_user(db, username, password);
+    
+    // Xác thực thành công 
     if (user_id > 0) {
         s->is_logged_in = 1;
         s->socket_fd = client_fd;

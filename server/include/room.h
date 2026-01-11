@@ -1,9 +1,7 @@
 #ifndef ROOM_H
 #define ROOM_H
 
-
 #include "game.h" 
-
 #define MAX_ROOMS 20
 #define MAX_PLAYERS_PER_ROOM 4
 
@@ -29,7 +27,7 @@ typedef struct {
     int is_eliminated; // 1: Đã bị loại
     int has_answered;  // 1: Đã trả lời câu hiện tại (Mode 2)
 
-    // --- TRẠNG THÁI TRỢ GIÚP (Cho Mode Private/Classic) ---
+    // --- TRẠNG THÁI TRỢ GIÚP ---
     int help_5050_used;      // 1. 50:50
     int help_audience_used;  // 2. Khán giả
     int help_phone_used;     // 3. Gọi điện thoại
@@ -79,12 +77,12 @@ void room_get_list_string(char *buffer);
 // FORMAT: "host_flag:username:score,..."
 void room_get_detail_string(int room_id, char *buffer);
 
-// Mode-specific answer handlers
+// Handler cho từng mode khác nhau
 int room_handle_answer_practice(int user_id, char *answer, char *result_msg);
 int room_handle_answer_coop(int user_id, char *answer, char *result_msg);
 int room_handle_answer_speedattack(int user_id, char *answer, char *result_msg);
 
-// Dispatcher (calls appropriate mode handler)
+// dispatcher để gọi từng hàm handler tương ứng
 int room_handle_answer(int user_id, char *answer, char *result_msg);
 int room_walk_away(int user_id, char *result_msg);
 
@@ -99,7 +97,7 @@ int room_use_lifeline(int room_id, int user_id, int lifeline_type, char *result_
 int room_all_eliminated(int room_id);
 
 // Xóa người chơi khỏi phòng (Mode 1 elimination)
-void room_remove_player(int room_id, int user_id);
+// void room_remove_player(int room_id, int user_id);
 
 // Kiểm tra xem tất cả người chơi đã trả lời câu hiện tại (Mode 2)
 int all_players_answered(int room_id);

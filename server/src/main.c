@@ -30,24 +30,7 @@ void init_session() {
     }
 }
 
-// Hàm ghi lịch sử vào file
-void log_history(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    FILE *fp = fopen("../../logs/server_history.txt", "a");
-    if (fp) {
-        time_t now = time(NULL);
-        char *time_str = ctime(&now);
-        time_str[strlen(time_str)-1] = '\0'; // remove newline
-        fprintf(fp, "[%s] ", time_str);
-        vfprintf(fp, format, args);
-        fprintf(fp, "\n");
-        fclose(fp);
-    }
-    va_end(args);
-}
-
-
+// Trả về các user online, trừ chính mình và admin
 void handle_get_online_users(int client_fd, struct pollfd* fds) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
@@ -55,7 +38,7 @@ void handle_get_online_users(int client_fd, struct pollfd* fds) {
     buffer[0] = MSG_ONLINE_USERS_RESULT;
     char *list_ptr = buffer + 1; 
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
-        // Exclude self, exclude admins (role=0)
+        // Bỏ chính mình, admin (role=0)
         if (fds[i].fd != -1 && fds[i].fd != client_fd && sessions[i].is_logged_in == 1) {
             if (sessions[i].role == 0) continue;
             
@@ -150,13 +133,16 @@ int main(){
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
 
+    // Khởi tạo database
     sqlite3 *db = db_init("../../database/database.db");
     if(!db) {
         fprintf(stderr, "Failed to connect to database\n");
         return -1;
     }
 
+    // Khởi tạo session
     init_session();
+    // Khởi tạo room
     room_system_init(db);
 
 
@@ -222,7 +208,7 @@ int main(){
 
         // --- GAME LOOP TIMER UPDATE ---
         for (int r = 0; r < MAX_ROOMS; r++) {
-             // room_update_timer trả về: 0 (ko đổi/ko playing), 1 (Next Q), 2 (End)
+             // room_update_timer trả về: 1 (Next Q), 2 (End)
              int status = room_update_timer(r);
              if (status == 1) {
                  broadcast_question(r);
@@ -238,7 +224,8 @@ int main(){
             if ((new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen)) < 0){
                 perror("ACCEPT FAIL");
             }else{
-                printf("New connection, socket fd: %d\n", new_socket);
+                printf("New connection, socket fd: %d, IP: %s, Port: %d\n", 
+                       new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
                 // Tìm slot trống nhét client vào
                 int found_slot = 0;
@@ -291,7 +278,7 @@ int main(){
                     unsigned char opcode = buffer[0];
                     char *payload = buffer + 1;
 
-                    // Just print for debug
+                    // debug
                     if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == 0x60) {
                          printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
                     } else {

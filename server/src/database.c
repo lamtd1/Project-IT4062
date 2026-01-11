@@ -97,13 +97,8 @@ void get_user(sqlite3 *db) {
     sqlite3_exec(db, sql, callback, 0, NULL);
 }
 
-void get_questions(sqlite3* db, int difficulty, int limit) {
-    char sql[256];
-    sprintf(sql, "SELECT * FROM questions WHERE difficulty = %d ORDER BY RANDOM() LIMIT %d;", difficulty, limit);
-    printf("--- Danh sách câu hỏi ngẫu nhiên ---\n");
-    sqlite3_exec(db, sql, callback, 0, NULL);
-}
 
+// Lưu vào game_history
 int save_history(sqlite3 *db, char *room, int winner_id, int game_mode, char *log) {
     char sql[8192];
     char *err = 0;
