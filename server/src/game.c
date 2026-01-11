@@ -79,73 +79,69 @@ Question* get_question_by_id(int id) {
     return NULL;
 }
 
-// RoomLoadCtx: Mảng câu hỏi + current_count: để biết load câu bao nhiêu rồi
-// limit: giới hạn 15 câu mỗi phòng - thay đổi đc
-
-typedef struct {
-    Question *target_array;
-    int *current_count;
-    int limit;
-} RoomLoadCtx;
-
-// Hàm helper để load câu hỏi vào mảng target_array - cho từng phòng load 15 câu hỏi
-static int room_load_cb(void *data, int argc, char **argv, char **axColName ) {
-    RoomLoadCtx *ctx = (RoomLoadCtx *)data;
-    // Load đủ 15 câu thì dừng
-    if (*ctx->current_count >= ctx->limit) return 1;
-    
-    // Gán đầu mảng câu hỏi vào biến q
-    Question *q = &ctx->target_array[*ctx->current_count];
-    
-    // Tách id ra
-    q->id = atoi(argv[0]);
-    // Tách độ khó ra
-    q->difficulty = atoi(argv[1]);
-    // Tách câu hỏi ra
-    strncpy(q->content, argv[2] ? argv[2] : "", sizeof(q->content));
-    // Tách từng câu trả lời và nội dung
-    for (int i = 0; i < 4; i++) {
-        strncpy(q->options[i], argv[i + 3] ? argv[i + 3] : "", sizeof(q->options[i]));
+// Helper: Fisher-Yates shuffle để random mảng index
+static void shuffle_indices(int *arr, int n) {
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
     }
-    // Tác đáp án đúng ra
-    strncpy(q->correct_answer, argv[7] ? argv[7] : "", sizeof(q->correct_answer));
-    // Dịch lên đáp án tiếp theo
-    (*ctx->current_count)++;
-    return 0;
 }
 
-// Load câu hỏi vào các phòng từ database - lấy random trực tiếp luôn
+// Load câu hỏi vào phòng từ mảng all_questions[] đã cache sẵn
+// Không query database → không block poll loop
 int load_room_questions(void *db_conn, Question *room_questions) {
-    sqlite3 *db = (sqlite3 *)db_conn;
-    int count = 0;
-    char *err = 0;
+    (void)db_conn; // Không cần dùng db_conn nữa
     
-    // 5 Easy (Diff 1)
-    RoomLoadCtx ctx1 = {room_questions, &count, 15};
-    char sql1[512];
-    sprintf(sql1, "SELECT id, difficulty, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions WHERE difficulty = 1 ORDER BY RANDOM() LIMIT 5;");
-    if (sqlite3_exec(db, sql1, room_load_cb, &ctx1, &err) != SQLITE_OK) {
-         fprintf(stderr, "SQL error (Easy): %s\n", err); sqlite3_free(err); return -1;
-    }
-
-    // 5 Medium (Diff 2)
-    RoomLoadCtx ctx2 = {room_questions, &count, 15};
-    char sql2[512];
-    sprintf(sql2, "SELECT id, difficulty, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions WHERE difficulty = 2 ORDER BY RANDOM() LIMIT 5;");
-    if (sqlite3_exec(db, sql2, room_load_cb, &ctx2, &err) != SQLITE_OK) {
-         fprintf(stderr, "SQL error (Medium): %s\n", err); sqlite3_free(err); return -1;
-    }
-
-    // 5 Hard (Diff 3)
-    RoomLoadCtx ctx3 = {room_questions, &count, 15};
-    char sql3[512];
-    sprintf(sql3, "SELECT id, difficulty, content, answer_a, answer_b, answer_c, answer_d, correct_answer FROM questions WHERE difficulty = 3 ORDER BY RANDOM() LIMIT 5;");
-    if (sqlite3_exec(db, sql3, room_load_cb, &ctx3, &err) != SQLITE_OK) {
-         fprintf(stderr, "SQL error (Hard): %s\n", err); sqlite3_free(err); return -1;
+    if (total_questions_loaded == 0) {
+        fprintf(stderr, "[GAME] Lỗi: Chưa load câu hỏi! Gọi game_init() trước.\n");
+        return -1;
     }
     
-    printf("[GAME] Loaded %d questions for room.\n", count);
-    return count;
+    // Tạo mảng index cho từng độ khó
+    int easy_indices[MAX_QUESTIONS_LOAD];
+    int medium_indices[MAX_QUESTIONS_LOAD];
+    int hard_indices[MAX_QUESTIONS_LOAD];
+    int easy_count = 0, medium_count = 0, hard_count = 0;
+    
+    // Phân loại câu hỏi theo độ khó
+    for (int i = 0; i < total_questions_loaded; i++) {
+        switch (all_questions[i].difficulty) {
+            case 1: easy_indices[easy_count++] = i; break;
+            case 2: medium_indices[medium_count++] = i; break;
+            case 3: hard_indices[hard_count++] = i; break;
+        }
+    }
+    
+    // Shuffle từng mảng index để random hóa
+    shuffle_indices(easy_indices, easy_count);
+    shuffle_indices(medium_indices, medium_count);
+    shuffle_indices(hard_indices, hard_count);
+    
+    int room_count = 0;
+    
+    // Lấy 5 câu Easy
+    int easy_pick = (easy_count < 5) ? easy_count : 5;
+    for (int i = 0; i < easy_pick; i++) {
+        room_questions[room_count++] = all_questions[easy_indices[i]];
+    }
+    
+    // Lấy 5 câu Medium
+    int medium_pick = (medium_count < 5) ? medium_count : 5;
+    for (int i = 0; i < medium_pick; i++) {
+        room_questions[room_count++] = all_questions[medium_indices[i]];
+    }
+    
+    // Lấy 5 câu Hard
+    int hard_pick = (hard_count < 5) ? hard_count : 5;
+    for (int i = 0; i < hard_pick; i++) {
+        room_questions[room_count++] = all_questions[hard_indices[i]];
+    }
+    
+    printf("[GAME] Loaded %d questions from cache (E:%d M:%d H:%d)\n", 
+           room_count, easy_pick, medium_pick, hard_pick);
+    return room_count;
 }
 
 int calculate_score(Question *q, char *user_ans, double time_taken) {

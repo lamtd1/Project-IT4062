@@ -144,6 +144,8 @@ int main(){
     init_session();
     // Khởi tạo room
     room_system_init(db);
+    // Load tất cả câu hỏi vào cache (1 lần duy nhất khi server khởi động)
+    game_init(db);
 
 
     char buffer[BUFFER_SIZE];

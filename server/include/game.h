@@ -15,8 +15,10 @@ typedef struct {
     char correct_answer[2];
 } Question;
 
-// Khởi tạo game (load câu hỏi)
-// Helper: Load 15 questions for a specific room (SQL RANDOM)
+// Khởi tạo game - load tất cả câu hỏi vào cache (gọi 1 lần khi server start)
+int game_init(void *db_conn);
+
+// Load 15 câu hỏi random từ cache cho 1 phòng
 int load_room_questions(void *db_conn, Question *room_questions);
 
 // Kiểm tra đáp án (Case insensitive)
