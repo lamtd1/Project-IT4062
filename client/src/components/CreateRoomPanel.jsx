@@ -1,76 +1,72 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "./ui/card";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { cn } from "../lib/utils";
+import { motion } from 'framer-motion';
 
 const CreateRoomPanel = ({ onCreate }) => {
     const [name, setName] = useState("");
-    const [mode, setMode] = useState("1"); // Default Elimination
+    const [mode, setMode] = useState("1"); // Default Coop (1)
 
     return (
-        <Card className="w-full max-w-md mx-auto mt-0 shadow-lg border-zinc-200 bg-white">
-            <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl flex items-center gap-2 text-zinc-900">
-                        <span className="text-2xl">🎮</span> Tạo phòng mới
-                    </CardTitle>
-                    <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-zinc-100 border border-zinc-200 text-zinc-500">
-                        Beta
-                    </span>
-                </div>
-                <CardDescription className="text-zinc-500">
-                    Chọn chế độ và đặt tên để bắt đầu.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                {/* Room Name */}
+        <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            className="w-full bg-white/90 backdrop-blur-sm border border-[#1A1A1A] p-6 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)]"
+        >
+            <h3 className="text-3xl font-serif italic text-ren-charcoal mb-1">Create</h3>
+            <div className="w-12 h-1 bg-ren-gold mb-6" />
+
+            <div className="space-y-6">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700">Tên phòng</label>
-                    <Input
-                        placeholder="Đặt tên phòng..."
+                    <label className="text-[10px] font-bold text-ren-gray uppercase tracking-widest">
+                        Room Name
+                    </label>
+                    <motion.input
+                        whileFocus={{ scale: 1.02, borderColor: "#1A1A1A" }}
+                        type="text"
+                        placeholder="Ex: The Colosseum"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="bg-white border-zinc-300 text-zinc-900 placeholder:text-zinc-400 focus-visible:ring-indigo-500"
+                        className="w-full p-3 bg-gray-50 border border-gray-200 focus:border-[#1A1A1A] outline-none text-sm font-mono transition-colors placeholder:font-serif placeholder:italic"
                     />
                 </div>
 
-                {/* Game Mode */}
-                <div className="space-y-2">
-                    <label className="text-sm font-medium text-zinc-700">Chế độ chơi</label>
-                    <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-ren-gray uppercase tracking-widest">
+                        Ritual Mode
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
                         {[
-                            { id: "0", label: "Luyện tập", icon: "👤" },
-                            { id: "1", label: "Loại trừ", icon: "⚔️" },
-                            { id: "2", label: "Tính điểm", icon: "⚡" },
+                            { id: "0", label: "SOLO" },
+                            { id: "1", label: "COOP" },
+                            { id: "2", label: "SPEED" },
                         ].map((m) => (
-                            <div
+                            <motion.button
                                 key={m.id}
                                 onClick={() => setMode(m.id)}
-                                className={cn(
-                                    "cursor-pointer rounded-lg border p-3 flex flex-col items-center justify-center gap-2 transition-all duration-200",
-                                    mode === m.id
-                                        ? "bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm ring-1 ring-indigo-200"
-                                        : "bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50 hover:border-zinc-300"
-                                )}
+                                whileHover={{ scale: 1.05, y: -2 }}
+                                whileTap={{ scale: 0.95 }}
+                                className={`flex flex-col items-center justify-center p-4 border transition-all ${mode === m.id
+                                    ? "bg-[#1A1A1A] text-white border-[#1A1A1A]"
+                                    : "bg-white text-ren-gray border-gray-200 hover:border-gray-400"
+                                    }`}
                             >
-                                <span className="text-lg">{m.icon}</span>
-                                <span className="text-xs font-bold">{m.label}</span>
-                            </div>
+                                <span className="text-sm font-bold tracking-widest">{m.label}</span>
+                            </motion.button>
                         ))}
                     </div>
                 </div>
-            </CardContent>
-            <CardFooter>
-                <Button
-                    className="w-full bg-zinc-900 text-white hover:bg-zinc-800 font-bold py-6 text-md shadow-md transition-all active:scale-[0.98]"
+
+                <motion.button
                     onClick={() => name && onCreate(`${name}:${mode}`)}
                     disabled={!name}
+                    whileHover={{ scale: 1.02, boxShadow: "0px 10px 20px rgba(212, 175, 55, 0.2)" }}
+                    whileTap={{ scale: 0.98 }}
+                    className="w-full py-4 bg-ren-gold text-white font-serif italic text-lg hover:bg-[#C5A028] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-ren-gold/20"
                 >
-                    Tạo phòng ngay
-                </Button>
-            </CardFooter>
-        </Card>
+                    Manifest Sanctuary
+                </motion.button>
+            </div>
+        </motion.div>
     );
 }
 

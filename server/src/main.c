@@ -15,11 +15,8 @@
 #include "network.h"
 
 #define BUFFER_SIZE 4096
-#define MAX_CLIENTS 10 
 #define PORT 8080
 
-// Define alias for consistency
-#define MSG_REGISTER_FAIL MSG_REGISTER_FAILED
 
 Session sessions[MAX_CLIENTS + 1];  // +1 for slot[0] is server
 
@@ -33,24 +30,7 @@ void init_session() {
     }
 }
 
-// Hàm ghi lịch sử vào file
-void log_history(const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-    FILE *fp = fopen("../../logs/server_history.txt", "a");
-    if (fp) {
-        time_t now = time(NULL);
-        char *time_str = ctime(&now);
-        time_str[strlen(time_str)-1] = '\0'; // remove newline
-        fprintf(fp, "[%s] ", time_str);
-        vfprintf(fp, format, args);
-        fprintf(fp, "\n");
-        fclose(fp);
-    }
-    va_end(args);
-}
-
-
+// Trả về các user online, trừ chính mình và admin
 void handle_get_online_users(int client_fd, struct pollfd* fds) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
@@ -58,8 +38,10 @@ void handle_get_online_users(int client_fd, struct pollfd* fds) {
     buffer[0] = MSG_ONLINE_USERS_RESULT;
     char *list_ptr = buffer + 1; 
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
-
+        // Bỏ chính mình, admin (role=0)
         if (fds[i].fd != -1 && fds[i].fd != client_fd && sessions[i].is_logged_in == 1) {
+            if (sessions[i].role == 0) continue;
+            
             strcat(list_ptr, sessions[i].username);
             strcat(list_ptr, ","); 
         }
@@ -83,20 +65,23 @@ void handle_get_leaderboard(sqlite3 *db, int client_fd) {
     buffer[0] = MSG_LEADERBOARD_LIST;
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
 }
-
+// Lấy user online, chưa ở trong phòng nào
 void handle_get_idle_users(int client_fd, struct pollfd* fds) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
 
     buffer[0] = MSG_IDLE_USERS_LIST; // 0x43
     char *list_ptr = buffer + 1; 
+    // Lọc user online, ngoài bản thân, và KHÔNG PHẢI ADMIN
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
-        // Logged in AND NOT in a room (room_get_by_user returns NULL)
-        // Also exclude self
         if (fds[i].fd != -1 && fds[i].fd != client_fd && sessions[i].is_logged_in == 1) {
+            // Check not admin (role != 0)
+            if (sessions[i].role == 0) continue;
+
+            // và chưa trong phòng nào
             if (room_get_by_user(sessions[i].user_id) == NULL) {
                 strcat(list_ptr, sessions[i].username);
-                strcat(list_ptr, ","); 
+                strcat(list_ptr, ",");
             }
         }
     }
@@ -104,16 +89,17 @@ void handle_get_idle_users(int client_fd, struct pollfd* fds) {
     if (len > 0 && list_ptr[len - 1] == ',') {
         list_ptr[len - 1] = '\0';
     }
-    // printf("Sending idle list to %d: %s\n", client_fd, list_ptr);
+    printf("Sending idle list to %d: %s\n", client_fd, list_ptr);
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
 }
 
+// Mời vào phòng
 void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char* target_name, struct pollfd* fds) {
-    // 1. Find Sender's Room
+    // 1. Tìm phòng người gửi
     Room *r = room_get_by_user(sender_id);
     if (!r) return; // Sender not in room
 
-    // 2. Find Target Socket
+    // 2. Tìm socket của người được mời
     int target_fd = -1;
     for (int i = 1; i < MAX_CLIENTS + 1; i++) {
         if (sessions[i].is_logged_in && strcmp(sessions[i].username, target_name) == 0) {
@@ -121,15 +107,12 @@ void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char*
             break;
         }
     }
-
     if (target_fd != -1) {
-        // 3. Send Invite: [0x48] "SenderName:RoomID:RoomName"
+        // 3. Gửi lời mời: [0x44] "SenderName:RoomID"
         char buffer[BUFFER_SIZE];
-        buffer[0] = MSG_INVITE_RECEIVED; // 0x48
+        buffer[0] = MSG_INVITE_RECEIVED; // 0x44
         
-        // Format payload: SenderName:RoomID:RoomName
-        // Note: RoomName might contain special formatted chars from our previous task (Name:Mode), so just send ID is safest, but Name is nice.
-        // Let's send: SenderName:RoomID
+        // Format payload: SenderName:RoomID
         sprintf(buffer + 1, "%s:%d", sender_name, r->id);
         
         send_with_delimiter(target_fd, buffer, 1 + strlen(buffer + 1));
@@ -140,14 +123,31 @@ void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char*
 }
 
 int main(){
+
+    // Điều hướng stdout vào file để log
+    if (freopen("../../logs/server_history.txt", "a", stdout) == NULL) {
+        perror("Không thể chuyển hướng stdout");
+    }
+    if (freopen("../../logs/server_history.txt", "a", stderr) == NULL) {
+        perror("Không thể chuyển hướng stderr");
+    }
+    // Thiết lập line buffering để log được ghi theo thời gian thực
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IOLBF, 0);
+
+    // Khởi tạo database
     sqlite3 *db = db_init("../../database/database.db");
     if(!db) {
         fprintf(stderr, "Failed to connect to database\n");
         return -1;
     }
 
+    // Khởi tạo session
     init_session();
+    // Khởi tạo room
     room_system_init(db);
+    // Load tất cả câu hỏi vào cache (1 lần duy nhất khi server khởi động)
+    game_init(db);
 
 
     char buffer[BUFFER_SIZE];
@@ -211,12 +211,8 @@ int main(){
         }
 
         // --- GAME LOOP TIMER UPDATE ---
-        // NOTE: Disabled for single-player classic mode
-        // Questions now advance immediately when user answers correctly
-        // This timer logic can be re-enabled for multiplayer modes
-        /*
         for (int r = 0; r < MAX_ROOMS; r++) {
-             // room_update_timer trả về: 0 (ko đổi/ko playing), 1 (Next Q), 2 (End)
+             // room_update_timer trả về: 1 (Next Q), 2 (End)
              int status = room_update_timer(r);
              if (status == 1) {
                  broadcast_question(r);
@@ -224,7 +220,6 @@ int main(){
                  broadcast_end_game(r, db);
              }
         }
-        */
         // ------------------------------
 
         // Kiểm tra socket server & kiểm tra cờ POLLIN được bật
@@ -233,7 +228,8 @@ int main(){
             if ((new_socket = accept(server_fd, (struct sockaddr *)&address, &addrlen)) < 0){
                 perror("ACCEPT FAIL");
             }else{
-                printf("New connection, socket fd: %d\n", new_socket);
+                printf("New connection, socket fd: %d, IP: %s, Port: %d\n", 
+                       new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
 
                 // Tìm slot trống nhét client vào
                 int found_slot = 0;
@@ -269,6 +265,11 @@ int main(){
                 if(valread == 0){
                     printf("Client %d (fd=%d) disconnected.\n", i, sd);
 
+                    // Tự động rời phòng nếu đang trong phòng
+                    if (sessions[i].user_id > 0) {
+                        room_leave(sessions[i].user_id);
+                    }
+
                     sessions[i].is_logged_in = 0;
                     strcpy(sessions[i].username, "");
                     sessions[i].socket_fd = -1;
@@ -276,17 +277,14 @@ int main(){
 
                     close(sd);
                     fds[i].fd = -1;
-
-                // Read > 0 -> Client gửi tín hiệu
                 } else if (valread > 0) {
                     buffer[valread] = '\0';
                     unsigned char opcode = buffer[0];
                     char *payload = buffer + 1;
 
-                    // Just print for debug
-                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL) {
-                         // Don't print payload for these to avoid confusion
-                         // printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
+                    // debug
+                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == MSG_REFRESH_USER_INFO) {
+                         printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
                     } else {
                          printf("Client %d sent OpCode: %02x, Payload: %s\n", sd, opcode, payload);
                     }
@@ -294,23 +292,11 @@ int main(){
                     // MOST IMPORTANT 
                     switch (opcode) {
                         case MSG_LOGIN: {
-                            char username[50];
-                            sscanf(payload, "%s", username);
-                            if (handle_login(db, sd, &sessions[i], payload)) {
-                                log_history("User '%s' logged in", username);
-                            } else {
-                                log_history("User '%s' login failed", username);
-                            }
+                            handle_login(db, sd, &sessions[i], payload);
                             break;
                         }
                         case MSG_REGISTER: {
-                            char username[50];
-                            sscanf(payload, "%s", username);
-                            if (handle_register(db, sd, payload)) {
-                                log_history("User '%s' registered", username);
-                            } else {
-                                log_history("User '%s' registration failed", username);
-                            }
+                            handle_register(db, sd, payload);
                             break;
                         }
                         case MSG_GET_ONLINE_USERS:
@@ -320,7 +306,6 @@ int main(){
                             // Nếu đang trong phòng thì rời phòng
                             room_leave(sessions[i].user_id);
                             
-                            log_history("User '%s' logged out", sessions[i].username);
                             sessions[i].is_logged_in = 0;
                             strcpy(sessions[i].username, "");
                             sessions[i].socket_fd = -1;
@@ -331,11 +316,54 @@ int main(){
                             char board[BUFFER_SIZE];
                             get_leaderboard(db, board);
                             char resp[BUFFER_SIZE];
-                            resp[0] = MSG_LEADERBOARD_LIST; // 0x46
+                            resp[0] = MSG_LEADERBOARD_LIST; 
                             strcpy(resp + 1, board);
                             send_with_delimiter(sd, resp, 1 + strlen(board));
-                            // printf("Sent leaderboard to client %d\n", sd);
-                            // printf("Sent leaderboard to client %d\n", sd);
+                            break;
+                        }
+                        
+                        case MSG_REFRESH_USER_INFO: {
+                            // Send updated user info (score) back to client
+                            int user_score = get_user_score(db, sessions[i].user_id);
+                            char response[64];
+                            response[0] = MSG_USER_INFO_UPDATE;
+                            sprintf(response + 1, "%d", user_score);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[USER_INFO] Sent updated score %d to user %d\n", user_score, sessions[i].user_id);
+                            break;
+                        }
+                        
+                        case MSG_GET_GAME_HISTORY: {
+                            char history_buffer[8192];
+                            printf("[GAME_HISTORY] Querying history for user_id=%d\n", sessions[i].user_id);
+                            get_user_game_history(db, sessions[i].user_id, history_buffer, sizeof(history_buffer));
+                            
+                            printf("[GAME_HISTORY] Query result: %lu bytes\n", strlen(history_buffer));
+                            if (strlen(history_buffer) > 0) {
+                                printf("[GAME_HISTORY] Sample data: %.200s...\n", history_buffer);
+                            } else {
+                                printf("[GAME_HISTORY] WARNING: Empty result for user_id=%d\n", sessions[i].user_id);
+                            }
+                            
+                            char response[8300];
+                            response[0] = MSG_GAME_HISTORY_RESPONSE;
+                            strcpy(response + 1, history_buffer);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[GAME_HISTORY] Sent history response (%lu bytes total)\n", 
+                                   1 + strlen(history_buffer));
+                            break;
+                        }
+                        
+                        case MSG_GET_QUESTIONS_BY_IDS: {
+                            const char *ids_str = buffer + 1;
+                            char questions_buffer[8192];
+                            get_questions_by_ids(db, ids_str, questions_buffer, sizeof(questions_buffer));
+                            
+                            char response[8300];
+                            response[0] = MSG_QUESTIONS_RESPONSE;
+                            strcpy(response + 1, questions_buffer);
+                            send_with_delimiter(sd, response, 1 + strlen(response + 1));
+                            printf("[QUESTIONS] Sent %lu bytes for IDs: %s\n", strlen(questions_buffer), ids_str);
                             break;
                         }
 
@@ -344,7 +372,7 @@ int main(){
                             break;
 
                         case MSG_INVITE_FRIEND:
-                            // Payload is TargetUsername
+                            // Payload là TargetUsername
                             handle_invite_friend(sd, sessions[i].user_id, sessions[i].username, payload, fds);
                             break;
 
@@ -361,6 +389,7 @@ int main(){
                         }
 
                         case MSG_GET_ROOM_DETAIL: {
+                            // payload là RoomID:mode
                             int r_id = atoi(payload);
                             char details[BUFFER_SIZE];
                             room_get_detail_string(r_id, details);
@@ -369,7 +398,6 @@ int main(){
                             resp[0] = MSG_ROOM_DETAIL; // 0x2A
                             strcpy(resp + 1, details);
                             send_with_delimiter(sd, resp, 1 + strlen(details));
-                            // printf("Sent details for room %d to client %d\n", r_id, sd); 
                             break;
                         }
 
@@ -382,14 +410,13 @@ int main(){
                                 resp[1] = 1; // Success
                                 resp[2] = r_id; // Room ID
                                 printf("User %s created room %d\n", sessions[i].username, r_id);
-                                log_history("User '%s' created room %d", sessions[i].username, r_id);
                             } else {
                                 resp[0] = MSG_ROOM_CREATE;
                                 resp[1] = 0; // Failure
                                 resp[2] = 0;
                                 printf("Create room failed for %s. Code: %d\n", sessions[i].username, r_id);
-                                log_history("User '%s' create room failed", sessions[i].username);
                             }
+                            printf("[MAIN] DEBUG: Created room. Session Username: '%s'\n", sessions[i].username);
                             send_with_delimiter(sd, resp, 3);
                             break;
                         }
@@ -397,54 +424,55 @@ int main(){
                         case MSG_ROOM_JOIN: {
                             int r_id = atoi(payload);
                             int res = room_join(r_id, sessions[i].user_id, sessions[i].username, sd);
+                            printf("[MAIN] DEBUG: User %d joining room. Session Username: '%s'\n", sessions[i].user_id, sessions[i].username);
+
                             char resp[2];
                             if (res == 1) {
                                 resp[0] = MSG_ROOM_JOIN;
                                 resp[1] = 1; 
                                 printf("User %s joined room %d\n", sessions[i].username, r_id);
-                                log_history("User '%s' joined room %d", sessions[i].username, r_id);
                             } else {
                                 resp[0] = MSG_ROOM_JOIN;
                                 resp[1] = 0; 
                                 printf("Join room failed. Code: %d\n", res);
-                                log_history("User '%s' join room %d failed", sessions[i].username, r_id);
                             }
                             send_with_delimiter(sd, resp, 2);
                             break;
                         }
 
-                        case MSG_LEAVE_ROOM: {
+                        case MSG_ROOM_LEAVE: {
                            room_leave(sessions[i].user_id);
                            printf("User %s left room request.\n", sessions[i].username);
-                           log_history("User '%s' left room", sessions[i].username);
-                           // Gửi lại confirm? Tuỳ protocol, tạm thời ko cần
                            break;
                         }
                         
                         case MSG_GAME_START: {
-                            // Find user's room
+                            // Tìm phòng của user
                             Room *r = room_get_by_user(sessions[i].user_id);
                             if (r) {
                                 int res = room_start_game(r->id, sessions[i].user_id);
                                 if (res == 1) {
                                     // Start Success -> Broadcast First Question Immediate
                                     printf("User %s started game in room %d\n", sessions[i].username, r->id);
-                                    log_history("User '%s' started game in room %d", sessions[i].username, r->id);
+                                    
+                                    // Broadcast initial scores (all 0) so UI shows player list
+                                    broadcast_scores(r->id);
+                                    
                                     broadcast_question(r->id);
                                 } else {
                                     printf("Start game failed. Error: %d\n", res);
-                                    log_history("User '%s' start game in room %d failed", sessions[i].username, r->id);
                                 }
                             }
                             break;
                         }
 
+                        // Điều hướng câu trả lời theo game mode
                         case MSG_ANSWER: {
-                            // Payload: "ANSWER_CHAR" (e.g., "A")
+                            // Payload: "ANSWER_CHAR" 
                             char result_msg[256];
                             int answer_result = room_handle_answer(sessions[i].user_id, payload, result_msg);
                             
-                            // Gửi lải kết quả: MSG_ANSWER_RESULT (0x23) + MSG string
+                            // Gửi kết quả: MSG_ANSWER_RESULT + MSG string
                             char resp[300];
                             resp[0] = MSG_ANSWER_RESULT;
                             strcpy(resp + 1, result_msg);
@@ -453,30 +481,63 @@ int main(){
                             // Log debug
                             printf("User %s answered %s. Result: %s\n", sessions[i].username, payload, result_msg);
                             
-                            // If answer is correct (return 1), move to next question immediately
-                            if (answer_result == 1) {
-                                Room *r = room_get_by_user(sessions[i].user_id);
-                                if (r && r->status == ROOM_PLAYING) {
-                                    r->current_question_idx++;
-                                    
-                                    // Check if game finished (all 15 questions answered)
-                                    if (r->current_question_idx >= 15) {
-                                        // Game Over - Won!
-                                        printf("[GAME] Room %d finished! User won!\n", r->id);
-                                        broadcast_end_game(r->id, db);
-                                        r->status = ROOM_FINISHED;
-                                    } else {
-                                        // Broadcast next question immediately
-                                        r->question_start_time = time(NULL);
-                                        broadcast_question(r->id);
-                                    }
+                            Room *r = room_get_by_user(sessions[i].user_id);
+                            if (!r) break;
+                            
+                            // Return codes:
+                            // 0 = Wrong (Mode 0/2 no elimination)
+                            // 1 = Correct (Mode 0/2 wait)
+                            // 2 = Wrong + Eliminated (Mode 1)
+                            // 3 = Correct + Instant Advance (Mode 1)
+                            // 4 = All Answered → Advance (Mode 2)
+                            
+                            if (answer_result == 1 && r->game_mode == MODE_CLASSIC) {
+                                // Mode 0: Advance immediately
+                                r->current_question_idx++;
+                                if (r->current_question_idx >= 15) {
+                                    printf("[GAME] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
                                 }
                             }
-                            // If answer is wrong (return 2), player is eliminated - game ends
+                            else if (answer_result == 3) {
+                                // Mode 1: Instant advance (first correct answer)
+                                r->current_question_idx++;
+                                reset_answer_flags(r->id); // Reset for next question
+                                
+                                if (r->current_question_idx >= 15) {
+                                    printf("[MODE1] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
+                                }
+                            }
+                            else if (answer_result == 4) {
+                                // Mode 2: All answered → Advance
+                                r->current_question_idx++;
+                                reset_answer_flags(r->id); // Reset for next question
+                                
+                                if (r->current_question_idx >= 15) {
+                                    printf("[MODE2] Room %d finished!\n", r->id);
+                                    broadcast_end_game(r->id, db);
+                                    r->status = ROOM_FINISHED;
+                                } else {
+                                    r->question_start_time = time(NULL);
+                                    broadcast_question(r->id);
+                                }
+                            }
                             else if (answer_result == 2) {
-                                Room *r = room_get_by_user(sessions[i].user_id);
-                                if (r) {
-                                    printf("[GAME] Room %d - Player eliminated\n", r->id);
+                                // Player eliminated (stays in room, marked as is_eliminated)
+                                printf("[GAME] Room %d - Player %s eliminated\n", r->id, sessions[i].username);
+                                
+                                // Check if ALL players eliminated
+                                if (r && room_all_eliminated(r->id)) {
+                                    printf("[GAME] Room %d - All players eliminated. Game over.\n", r->id);
                                     broadcast_end_game(r->id, db);
                                     r->status = ROOM_FINISHED;
                                 }
@@ -497,22 +558,143 @@ int main(){
                                 room_use_lifeline(r->id, sessions[i].user_id, type, result_msg);
                                 strcpy(resp + 1, result_msg);
                             } else {
-                                strcpy(resp + 1, "Ban khong o trong phong nao!");
+                                strcpy(resp + 1, "Bạn không ở phòng nào!");
                             }
                             send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
                             break;
                         }
                         
+                        // ========== ADMIN HANDLERS ==========
+                        case MSG_GET_ALL_USERS: {
+                            // Only admin can access this
+                            int role = get_user_role(db, sessions[i].user_id);
+                            if (role != 0) {
+                                // Not admin, send empty response
+                                char resp[2];
+                                resp[0] = MSG_ALL_USERS_RESULT;
+                                resp[1] = '\0';
+                                send_with_delimiter(sd, resp, 1);
+                                break;
+                            }
+                            
+                            char users_data[BUFFER_SIZE];
+                            get_all_users_for_admin(db, users_data);
+                            
+                            // Now append online status for each user
+                            // Format: "id:username:total_win:total_score:is_online,..."
+                            char final_buffer[BUFFER_SIZE];
+                            final_buffer[0] = '\0';
+                            
+                            // Parse users_data and add online status
+                            char *token = strtok(users_data, ",");
+                            while (token != NULL) {
+                                int uid;
+                                char uname[50];
+                                int uwins, uscore;
+                                sscanf(token, "%d:%[^:]:%d:%d", &uid, uname, &uwins, &uscore);
+                                
+                                // Check if user is online in sessions
+                                int is_online = 0;
+                                for (int j = 1; j < MAX_CLIENTS + 1; j++) {
+                                    if (sessions[j].is_logged_in && sessions[j].user_id == uid) {
+                                        is_online = 1;
+                                        break;
+                                    }
+                                }
+                                
+                                char line[300];
+                                sprintf(line, "%d:%s:%d:%d:%d,", uid, uname, uwins, uscore, is_online);
+                                strcat(final_buffer, line);
+                                
+                                token = strtok(NULL, ",");
+                            }
+                            
+                            // Remove trailing comma
+                            int len = strlen(final_buffer);
+                            if (len > 0 && final_buffer[len-1] == ',') final_buffer[len-1] = '\0';
+                            
+                            char resp[BUFFER_SIZE];
+                            resp[0] = MSG_ALL_USERS_RESULT;
+                            strcpy(resp + 1, final_buffer);
+                            send_with_delimiter(sd, resp, 1 + strlen(final_buffer));
+                            break;
+                        }
+                        
+                        case MSG_DELETE_USER: {
+                            // Only admin can delete
+                            int role = get_user_role(db, sessions[i].user_id);
+                            if (role != 0) {
+                                char resp[2];
+                                resp[0] = MSG_DELETE_USER_RESULT;
+                                resp[1] = '0'; // Failed
+                                send_with_delimiter(sd, resp, 2);
+                                break;
+                            }
+                            
+                            int target_user_id = atoi(payload);
+                            int success = soft_delete_user(db, target_user_id);
+                            
+                            // If user is online, kick them out
+                            if (success) {
+                                for (int j = 1; j < MAX_CLIENTS + 1; j++) {
+                                    if (sessions[j].user_id == target_user_id && sessions[j].is_logged_in) {
+                                        // Force logout
+                                        room_leave(sessions[j].user_id);
+                                        sessions[j].is_logged_in = 0;
+                                        sessions[j].user_id = -1;
+                                        strcpy(sessions[j].username, "");
+                                        
+                                        // Optionally send disconnect message
+                                        char kick_msg[2];
+                                        kick_msg[0] = MSG_LOGOUT;
+                                        send_with_delimiter(fds[j].fd, kick_msg, 1);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            char resp[2];
+                            resp[0] = MSG_DELETE_USER_RESULT;
+                            resp[1] = success ? '1' : '0';
+                            send_with_delimiter(sd, resp, 2);
+                            break;
+                        }
+                        
+                        case MSG_GET_USER_DETAIL: {
+                            // Only admin can view details
+                            int role = get_user_role(db, sessions[i].user_id);
+                            if (role != 0) {
+                                char resp[2];
+                                resp[0] = MSG_USER_DETAIL_RESULT;
+                                resp[1] = '\0';
+                                send_with_delimiter(sd, resp, 1);
+                                break;
+                            }
+                            
+                            int target_user_id = atoi(payload);
+                            char user_detail[256];
+                            get_user_detail(db, target_user_id, user_detail);
+                            
+                            char resp[300];
+                            resp[0] = MSG_USER_DETAIL_RESULT;
+                            strcpy(resp + 1, user_detail);
+                            send_with_delimiter(sd, resp, 1 + strlen(user_detail));
+                            break;
+                        }
+                        // walk away là được giữ điểm
                         case MSG_WALK_AWAY: {
                             char result_msg[256];
                             int res = room_walk_away(sessions[i].user_id, result_msg);
                             
                             if (res) {
                                 char resp[300];
-                                resp[0] = MSG_GAME_END; // Tạm dùng GAME END báo cho rieng user? Hoặc ANSWER_RESULT
+                                resp[0] = MSG_WALK_AWAY;  // Gửi đúng opcode để client xử lý
                                 strcpy(resp + 1, result_msg);
                                 send_with_delimiter(sd, resp, 1 + strlen(result_msg));
                             }
+                            break;
+                        }
+                        default: {
                             break;
                         }
                     }

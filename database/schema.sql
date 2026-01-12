@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS users (
     password TEXT NOT NULL,
     total_win INTEGER DEFAULT 0,
     total_score INTEGER DEFAULT 0,
-    is_online INTEGER DEFAULT 0
+    role INTEGER DEFAULT 1, -- 0: Admin, 1: User
+    is_deleted INTEGER DEFAULT 0 -- 0: Active, 1: Soft deleted
 );
 
 -- Bảng câu hỏi
@@ -36,7 +37,6 @@ CREATE TABLE IF NOT EXISTS user_stats (
     user_id INTEGER,
     game_id INTEGER,
     score_achieved INTEGER,
-    rank INTEGER,
     PRIMARY KEY (user_id, game_id),
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (game_id) REFERENCES game_history (id)
