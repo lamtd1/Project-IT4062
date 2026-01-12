@@ -447,7 +447,7 @@ int main(){
                         }
                         
                         case MSG_GAME_START: {
-                            // Find user's room
+                            // Tìm phòng của user
                             Room *r = room_get_by_user(sessions[i].user_id);
                             if (r) {
                                 int res = room_start_game(r->id, sessions[i].user_id);
@@ -692,6 +692,9 @@ int main(){
                                 strcpy(resp + 1, result_msg);
                                 send_with_delimiter(sd, resp, 1 + strlen(result_msg));
                             }
+                            break;
+                        }
+                        default: {
                             break;
                         }
                     }
