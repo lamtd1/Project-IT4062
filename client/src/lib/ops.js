@@ -13,11 +13,12 @@ export const OPS = {
     // --- ROOM MANAGEMENT ---
     ROOM_CREATE: 0x10,
     ROOM_JOIN: 0x11,
-    LEAVE_ROOM: 0x12, // Was 0x31
-    ROOM_LIST: 0x13,  // Was 0x28
-    GET_ROOMS: 0x14,  // Was 0x27
-    ROOM_DETAIL: 0x15, // Was 0x2A
-    GET_ROOM_DETAIL: 0x16, // Was 0x29
+    LEAVE_ROOM: 0x12,
+    ROOM_LIST: 0x13,
+    GET_ROOMS: 0x14,
+    ROOM_DETAIL: 0x15,
+    GET_ROOM_DETAIL: 0x16,
+    ROOM_UPDATE: 0x17,
 
     // --- GAMEPLAY ---
     GAME_START: 0x20,
@@ -32,6 +33,7 @@ export const OPS = {
 
     // --- SOCIAL & INFO ---
     GET_ONLINE_USERS: 0x40,
+    ONLINE_USERS_RESULT: 0x41,
     GET_IDLE_USERS: 0x42,
     IDLE_USERS_LIST: 0x43,
     INVITE_RECEIVED: 0x44,

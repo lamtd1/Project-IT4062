@@ -362,9 +362,9 @@ int room_update_timer(int room_id) {
     
     // MODE 1: COOP - Timeout = Cả team thua (giống trả lời sai)
     if (r->game_mode == MODE_COOP && elapsed > QUESTION_DURATION) {
-        printf("[COOP TIMEOUT] Room %d - Time's up! Team eliminated.\n", room_id);
+        printf("[TIMEOUT] Room %d - Time's up! Team eliminated.\n", room_id);
         
-        // Đánh dấu tất cả là eliminated (giống logic trả lời sai)
+        // Đánh dấu tất cả là eliminated
         for (int i = 0; i < r->player_count; i++) {
             r->members[i].is_eliminated = 1;
         }
@@ -374,7 +374,7 @@ int room_update_timer(int room_id) {
     }
     
     // MODE 2: Timeout handling (30s)
-    if (r->game_mode == MODE_SCORE_ATTACK && elapsed > 30) {
+    if (r->game_mode == MODE_SCORE_ATTACK && elapsed > QUESTION_DURATION) {
         // Quá thời gian thì tự động là sai
         int any_auto_answered = 0;
         for (int i = 0; i < r->player_count; i++) {

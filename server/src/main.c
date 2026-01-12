@@ -65,7 +65,7 @@ void handle_get_leaderboard(sqlite3 *db, int client_fd) {
     buffer[0] = MSG_LEADERBOARD_LIST;
     send_with_delimiter(client_fd, buffer, 1 + strlen(list_ptr));
 }
-// Lất user online, chưa ở trong phòng nào
+// Lấy user online, chưa ở trong phòng nào
 void handle_get_idle_users(int client_fd, struct pollfd* fds) {
     char buffer[BUFFER_SIZE];
     memset(buffer, 0, BUFFER_SIZE);
@@ -123,6 +123,8 @@ void handle_invite_friend(int sender_fd, int sender_id, char* sender_name, char*
 }
 
 int main(){
+
+    // Điều hướng stdout vào file để log
     if (freopen("../../logs/server_history.txt", "a", stdout) == NULL) {
         perror("Không thể chuyển hướng stdout");
     }
@@ -281,7 +283,7 @@ int main(){
                     char *payload = buffer + 1;
 
                     // debug
-                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == 0x60) {
+                    if (opcode == MSG_GET_ROOMS || opcode == MSG_GET_LEADERBOARD || opcode == MSG_GET_ROOM_DETAIL || opcode == MSG_GET_ALL_USERS || opcode == MSG_REFRESH_USER_INFO) {
                          printf("Client %d sent OpCode: %02x (No Payload)\n", sd, opcode);
                     } else {
                          printf("Client %d sent OpCode: %02x, Payload: %s\n", sd, opcode, payload);
@@ -314,13 +316,13 @@ int main(){
                             char board[BUFFER_SIZE];
                             get_leaderboard(db, board);
                             char resp[BUFFER_SIZE];
-                            resp[0] = MSG_LEADERBOARD_LIST; // 0x46
+                            resp[0] = MSG_LEADERBOARD_LIST; 
                             strcpy(resp + 1, board);
                             send_with_delimiter(sd, resp, 1 + strlen(board));
                             break;
                         }
                         
-                        case 0x60: { // MSG_REFRESH_USER_INFO
+                        case MSG_REFRESH_USER_INFO: {
                             // Send updated user info (score) back to client
                             int user_score = get_user_score(db, sessions[i].user_id);
                             char response[64];
@@ -331,7 +333,7 @@ int main(){
                             break;
                         }
                         
-                        case 0x70: { // MSG_GET_GAME_HISTORY
+                        case MSG_GET_GAME_HISTORY: {
                             char history_buffer[8192];
                             printf("[GAME_HISTORY] Querying history for user_id=%d\n", sessions[i].user_id);
                             get_user_game_history(db, sessions[i].user_id, history_buffer, sizeof(history_buffer));
@@ -352,7 +354,7 @@ int main(){
                             break;
                         }
                         
-                        case 0x72: { // MSG_GET_QUESTIONS_BY_IDS
+                        case MSG_GET_QUESTIONS_BY_IDS: {
                             const char *ids_str = buffer + 1;
                             char questions_buffer[8192];
                             get_questions_by_ids(db, ids_str, questions_buffer, sizeof(questions_buffer));
@@ -370,7 +372,7 @@ int main(){
                             break;
 
                         case MSG_INVITE_FRIEND:
-                            // Payload is TargetUsername
+                            // Payload là TargetUsername
                             handle_invite_friend(sd, sessions[i].user_id, sessions[i].username, payload, fds);
                             break;
 
@@ -387,6 +389,7 @@ int main(){
                         }
 
                         case MSG_GET_ROOM_DETAIL: {
+                            // payload là RoomID:mode
                             int r_id = atoi(payload);
                             char details[BUFFER_SIZE];
                             room_get_detail_string(r_id, details);
@@ -395,7 +398,6 @@ int main(){
                             resp[0] = MSG_ROOM_DETAIL; // 0x2A
                             strcpy(resp + 1, details);
                             send_with_delimiter(sd, resp, 1 + strlen(details));
-                            // printf("Sent details for room %d to client %d\n", r_id, sd); 
                             break;
                         }
 
@@ -441,7 +443,6 @@ int main(){
                         case MSG_ROOM_LEAVE: {
                            room_leave(sessions[i].user_id);
                            printf("User %s left room request.\n", sessions[i].username);
-                           // Gửi lại confirm? Tuỳ protocol, tạm thời ko cần
                            break;
                         }
                         
@@ -465,12 +466,13 @@ int main(){
                             break;
                         }
 
+                        // Điều hướng câu trả lời theo game mode
                         case MSG_ANSWER: {
-                            // Payload: "ANSWER_CHAR" (e.g., "A")
+                            // Payload: "ANSWER_CHAR" 
                             char result_msg[256];
                             int answer_result = room_handle_answer(sessions[i].user_id, payload, result_msg);
                             
-                            // Gửi lải kết quả: MSG_ANSWER_RESULT (0x23) + MSG string
+                            // Gửi kết quả: MSG_ANSWER_RESULT + MSG string
                             char resp[300];
                             resp[0] = MSG_ANSWER_RESULT;
                             strcpy(resp + 1, result_msg);
@@ -483,9 +485,9 @@ int main(){
                             if (!r) break;
                             
                             // Return codes:
-                            // 0 = Wrong (Mode 2 no elimination)
+                            // 0 = Wrong (Mode 0/2 no elimination)
                             // 1 = Correct (Mode 0/2 wait)
-                            // 2 = Wrong + Eliminated (Mode 0/1)
+                            // 2 = Wrong + Eliminated (Mode 1)
                             // 3 = Correct + Instant Advance (Mode 1)
                             // 4 = All Answered → Advance (Mode 2)
                             
@@ -556,7 +558,7 @@ int main(){
                                 room_use_lifeline(r->id, sessions[i].user_id, type, result_msg);
                                 strcpy(resp + 1, result_msg);
                             } else {
-                                strcpy(resp + 1, "Ban khong o trong phong nao!");
+                                strcpy(resp + 1, "Bạn không ở phòng nào!");
                             }
                             send_with_delimiter(sd, resp, 1 + strlen(resp + 1));
                             break;
@@ -679,14 +681,14 @@ int main(){
                             send_with_delimiter(sd, resp, 1 + strlen(user_detail));
                             break;
                         }
-                        
+                        // walk away là được giữ điểm
                         case MSG_WALK_AWAY: {
                             char result_msg[256];
                             int res = room_walk_away(sessions[i].user_id, result_msg);
                             
                             if (res) {
                                 char resp[300];
-                                resp[0] = MSG_GAME_END; // Tạm dùng GAME END báo cho rieng user? Hoặc ANSWER_RESULT
+                                resp[0] = MSG_WALK_AWAY;  // Gửi đúng opcode để client xử lý
                                 strcpy(resp + 1, result_msg);
                                 send_with_delimiter(sd, resp, 1 + strlen(result_msg));
                             }

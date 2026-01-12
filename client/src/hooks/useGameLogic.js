@@ -10,7 +10,7 @@ export const useGameLogic = () => {
     const [username, setUsername] = useState(() => localStorage.getItem('username') || '');
     const [password, setPassword] = useState('');
 
-    // Auth state - Do not persist userId/score manually as socket session is lost on refresh
+    // Auth state - Ko reload, dữ liệu lưu trong socket nên sẽ mất khi refresh
     const [userId, setUserId] = useState(null);
     const [score, setScore] = useState(0);
     const [userRole, setUserRole] = useState(1);
@@ -45,14 +45,16 @@ export const useGameLogic = () => {
     const [helpOverlay, setHelpOverlay] = useState({ open: false, text: '' });
 
     // --- SOCKET HANDLERS ---
+    // Cứ 5s là gửi request để lấy rooms và leaderboard
     useEffect(() => {
-        // Poll rooms and leaderboard periodically
+        // Poll rooms & leaderboard mỗi 5s
         const interval = setInterval(() => {
             if (window.location.pathname === '/home') {
+                // Lấy rooms
                 const p1 = new Uint8Array(1); p1[0] = OPS.GET_ROOMS;
                 socket.emit("client_to_server", p1);
 
-                // Also poll leaderboard
+                // Lấy leaderboard
                 const p2 = new Uint8Array(1); p2[0] = OPS.GET_LEADERBOARD; // MSG_GET_LEADERBOARD
                 socket.emit("client_to_server", p2);
             }
@@ -73,9 +75,10 @@ export const useGameLogic = () => {
             const view = new Uint8Array(data);
             const opcode = view[0];
             const textDecoder = new TextDecoder();
-
+            // Login thành công 
             if (opcode === OPS.LOGIN_SUCCESS) {
                 const payload = textDecoder.decode(view.slice(1));
+                // payload: id:score:role
                 const [idStr, scoreStr, roleStr] = payload.split(':');
                 const role = parseInt(roleStr || '1');
                 const uid = parseInt(idStr);
@@ -86,7 +89,7 @@ export const useGameLogic = () => {
                 setScore(sc);
                 setUserRole(role);
 
-                // Persist to localStorage
+                // Lưu vào localStorage
                 localStorage.setItem('userId', uid.toString());
                 localStorage.setItem('username', username);
                 localStorage.setItem('score', sc.toString());
@@ -96,19 +99,25 @@ export const useGameLogic = () => {
                 // Navigate immediately using the role from server response (not state)
                 setTimeout(() => navigate(role === 0 ? '/admin' : '/home'), 100);
             }
+            // Login ko thành
             else if (opcode === OPS.LOGIN_FAILED) {
                 setStatus({ msg: "Sai tài khoản hoặc mật khẩu!", type: 'error' });
             }
+            // Đăng ký thành công
             else if (opcode === OPS.REGISTER_SUCCESS) {
                 setStatus({ msg: "Đăng ký thành công!", type: 'success' });
                 setTimeout(() => { setStatus({ msg: '', type: '' }); navigate('/'); }, 1500);
             }
+            // Đăng ký thất bại
             else if (opcode === OPS.REGISTER_FAILED) setStatus({ msg: "Tài khoản đã tồn tại.", type: 'error' });
+            // Đã đăng nhập
             else if (opcode === OPS.ALREADY_LOGIN) setStatus({ msg: "Bạn đã đăng nhập rồi!", type: 'error' });
+            // Server đầy
             else if (opcode === OPS.SERVER_FULL) setStatus({ msg: "Server đã đầy!", type: 'error' });
 
             // --- ROOM RESPONSE ---
             else if (opcode === OPS.ROOM_CREATE) {
+                // payload: success:roomId
                 const success = view[1];
                 if (success) {
                     const rId = view[2];
@@ -119,6 +128,7 @@ export const useGameLogic = () => {
                 } else setStatus({ msg: "Tạo phòng thất bại!", type: 'error' });
             }
             else if (opcode === OPS.ROOM_JOIN) {
+                // payload: success
                 const success = view[1];
                 if (success) {
                     setIsHost(false);
@@ -126,6 +136,7 @@ export const useGameLogic = () => {
                 } else setStatus({ msg: "Vào phòng thất bại!", type: 'error' });
             }
             else if (opcode === OPS.LEAVE_ROOM) {
+                // payload:success
                 alert("Phòng đã bị hủy do chủ phòng thoát!");
                 navigate('/home');
                 setRoomMembers([]);
@@ -135,6 +146,7 @@ export const useGameLogic = () => {
 
             // --- GAME RESPONSES ---
             else if (opcode === OPS.QUESTION) { // MSG_QUESTION
+                // payload: level|question|a|b|c|d|duration
                 const payload = textDecoder.decode(view.slice(1));
                 const parts = payload.split('|');
                 if (parts.length >= 7) {
@@ -161,7 +173,7 @@ export const useGameLogic = () => {
                 const eliminated = parts[1]?.includes('eliminated:1');
                 const wrongAnswerFlag = parts[2]?.includes('wrong_answer:1');
 
-                // Parse score from message "Tong: 200" to update immediately (fixes timing bug)
+                // Parse score from message 
                 const scoreMatch = message.match(/Tong:\s*(\d+)/);
                 let finalScore = currentGameScore; // Default to current
                 if (scoreMatch) {
